@@ -11,6 +11,7 @@ from app.models.teacher_profile import TeacherProfile
 from app.models.training import Training
 from app.models.badge import Badge
 from app.core.dependencies import get_current_user, require_admin
+from app.services.analytics_cache import mark_analytics_cache_stale
 from app.schemas.teacher import (
     TeacherProfileUpdate,
     TeacherProfileResponse,
@@ -50,6 +51,7 @@ async def update_my_profile(
     for key, value in update_data.items():
         setattr(profile, key, value)
 
+    mark_analytics_cache_stale()
     await db.flush()
     return profile
 
@@ -83,6 +85,7 @@ async def add_training(
     if training.date_attended and (not profile.last_training_date or training.date_attended > profile.last_training_date):
         profile.last_training_date = training.date_attended
 
+    mark_analytics_cache_stale()
     return training
 
 

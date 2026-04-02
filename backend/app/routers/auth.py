@@ -7,6 +7,7 @@ from app.models.user import User
 from app.models.teacher_profile import TeacherProfile
 from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token, decode_token
 from app.core.dependencies import get_current_user
+from app.services.analytics_cache import mark_analytics_cache_stale
 from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest, UserResponse
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -32,6 +33,9 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     if user.role == "teacher":
         profile = TeacherProfile(user_id=user.id)
         db.add(profile)
+
+    # Registration changes population data; invalidate analytics snapshot.
+    mark_analytics_cache_stale()
 
     tokens = _issue_tokens(user)
     return tokens
