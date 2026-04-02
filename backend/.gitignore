@@ -1,0 +1,10 @@
+.venv/
+.env
+__pycache__/
+*.pyc
+*.pyo
+alembic/versions/*.py
+!alembic/versions/__init__.py
+.idea/
+.vscode/
+.context
