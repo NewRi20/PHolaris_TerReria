@@ -399,6 +399,26 @@ Authorization: Bearer <access_token>
 **Description:** List sentiment entries for an event  
 **Authentication:** Admin
 
+## AI Endpoints
+
+### Generate AI Event Proposals
+
+**Endpoint:** `POST /ai/generate-events`  
+**Description:** Analyze metrics and generate event recommendations using Gemini  
+**Authentication:** Admin
+
+### Get AI Recommendations
+
+**Endpoint:** `GET /ai/recommendations`  
+**Description:** Return the latest cached AI recommendations  
+**Authentication:** Admin
+
+### Generate Invitation Emails
+
+**Endpoint:** `POST /ai/generate-invitations/{event_id}`  
+**Description:** Draft customized invitation emails using AI based on event constraints  
+**Authentication:** Admin
+
 ## Analytics Endpoints
 
 ### Get analytics overview
