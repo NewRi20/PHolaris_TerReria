@@ -22,6 +22,9 @@ Built to support teacher profiling, regional analytics, event generation and app
 - Training records with automatic badge awarding
 - Event lifecycle support: create, update, approve, vote, RSVP, sentiment, invitation sending, and voiding
 - Analytics engine for regional workforce and readiness insights
+- **AI-powered event generation** using Google Gemini: generates 5 recommendations based on regional metrics
+- **Personalized invitation drafting**: generates customized email invitations for matched teachers
+- **Sentiment scoring**: AI-based batch scoring of teacher feedback (-1.0 to 1.0 scale)
 - Map views for regions and upcoming events
 - Admin teacher import from CSV, XLS, and XLSX
 - Manual stale-event cleanup for deployments without cron jobs
@@ -684,7 +687,7 @@ Same structure as Get a specific event above.
 
 ### Generate AI Event Proposals
 
-**Endpoint:** `POST /ai/generate-events`  
+**Endpoint:** `POST ai/generate-events`  
 **Description:** Analyze metrics and generate event recommendations using Gemini  
 **Authentication:** Admin
 
@@ -692,21 +695,53 @@ Same structure as Get a specific event above.
 
 ```json
 {
-  "generated_events": [
+  "status": "generated",
+  "count": 5,
+  "recommendations": [
     {
       "title": "Physics Teachers Workshop",
       "slug": "physics-workshop-2026",
       "description": "Workshop to address physics teaching gaps",
+      "event_type": "Workshop",
       "target_subject": "Physics",
+      "target_subject_branch": null,
+      "target_grade_levels": ["Grade 9", "Grade 10"],
       "target_regions": ["NCR"],
       "target_provinces": ["National Capital Region"],
+      "target_audience_criteria": {
+        "max_years_experience": 5,
+        "teaching_outside_specialization": true,
+        "subjects": ["Physics"]
+      },
+      "recommended_format": "In-person",
+      "priority_timeline": "High",
+      "suggested_duration_days": 3,
+      "suggested_date_earliest": "2026-05-15",
+      "suggested_date_latest": "2026-05-31",
+      "location": "Manila Convention Center",
+      "expected_impact": {
+        "attendance_estimate": 150,
+        "impact_type": "upskilling"
+      },
+      "learning_objectives": ["Teachers will master modern physics pedagogy", "Teachers will understand inquiry-based learning"],
+      "suggested_topics": ["Quantum mechanics fundamentals", "Thermodynamics applications"],
+      "format_justification": "In-person format enables hands-on demonstrations and peer collaboration",
+      "tags": ["physics", "pedagogy", "upskilling"],
+      "ai_generated": true,
       "ai_rationale": {
-        "reason": "High specialization gap identified",
-        "confidence": 0.92
+        "generated_at": "2026-04-03T15:30:00Z",
+        "method": "regional_analytics_targeting",
+        "snapshot_timestamp": "2026-04-03T15:29:00Z"
+      },
+      "ai_analysis_snapshot": {
+        "priority_regions": ["NCR", "R3", "R4"],
+        "critical_regions": 3,
+        "subject_shortages": 8
       }
     }
   ],
-  "analysis_timestamp": "2026-04-03T15:30:00Z"
+  "generated_at": "2026-04-03T15:30:00Z",
+  "note": "Recommendations are NOT auto-approved. Review and approve manually."
 }
 ```
 
@@ -718,12 +753,94 @@ Same structure as Get a specific event above.
 
 **Response (200 OK):**
 
-Same structure as Generate AI Event Proposals above.
+```json
+{
+  "count": 5,
+  "recommendations": [
+    {
+      "title": "Physics Teachers Workshop",
+      "slug": "physics-workshop-2026",
+      "description": "Workshop to address physics teaching gaps",
+      "event_type": "Workshop",
+      "target_subject": "Physics",
+      "target_subject_branch": null,
+      "target_grade_levels": ["Grade 9", "Grade 10"],
+      "target_regions": ["NCR"],
+      "target_provinces": ["National Capital Region"],
+      "target_audience_criteria": {
+        "max_years_experience": 5,
+        "teaching_outside_specialization": true,
+        "subjects": ["Physics"]
+      },
+      "recommended_format": "In-person",
+      "priority_timeline": "High",
+      "suggested_duration_days": 3,
+      "suggested_date_earliest": "2026-05-15",
+      "suggested_date_latest": "2026-05-31",
+      "location": "Manila Convention Center",
+      "expected_impact": {
+        "attendance_estimate": 150,
+        "impact_type": "upskilling"
+      },
+      "learning_objectives": ["Teachers will master modern physics pedagogy"],
+      "suggested_topics": ["Quantum mechanics", "Thermodynamics"],
+      "format_justification": "In-person format enables hands-on demonstrations",
+      "tags": ["physics", "pedagogy"],
+      "ai_generated": true,
+      "ai_rationale": {
+        "generated_at": "2026-04-03T15:30:00Z",
+        "method": "regional_analytics_targeting",
+        "snapshot_timestamp": "2026-04-03T15:29:00Z"
+      },
+      "ai_analysis_snapshot": {
+        "priority_regions": ["NCR", "R3", "R4"],
+        "critical_regions": 3,
+        "subject_shortages": 8
+      }
+    }
+  ],
+  "generated_at": "2026-04-03T15:30:00Z"
+}
+```
 
-### Generate Invitation Emails
+### Approve and Save Recommendations
 
-**Endpoint:** `POST /ai/generate-invitations/{event_id}`  
-**Description:** Draft customized invitation emails using AI based on event constraints  
+**Endpoint:** `POST ai/approve-events`  
+**Description:** Approve selected cached recommendations and save them to database as draft events  
+**Authentication:** Admin
+
+**Request Body:**
+
+```json
+{
+  "event_slugs": [
+    "physics-workshop-2026",
+    "science-camp-r1-2026"
+  ]
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "saved": 2,
+  "events": [
+    {
+      "id": "<uuid>",
+      "title": "Physics Teachers Workshop",
+      "slug": "physics-workshop-2026",
+      "status": "draft",
+      "ai_generated": true
+    }
+  ]
+}
+```
+
+### Generate Personalized Invitations
+
+**Endpoint:** `POST ai/generate-invitations/{event_id}`  
+**Description:** Draft customized invitation emails for teachers matching event criteria  
 **Authentication:** Admin
 
 **Response (200 OK):**
@@ -731,12 +848,39 @@ Same structure as Generate AI Event Proposals above.
 ```json
 {
   "event_id": "<uuid>",
-  "invitations_generated": 42,
-  "sample_invitation": {
-    "recipient": "teacher1@example.com",
-    "subject": "You're invited: Physics Teachers Workshop",
-    "body": "Dear Physics Teacher,\n\nWe would like to invite you to our upcoming Physics Teachers Workshop..."
-  }
+  "event_title": "Physics Teachers Workshop",
+  "matched_teachers": 42,
+  "invitation_drafts": [
+    {
+      "teacher_id": "<uuid>",
+      "teacher_name": "Maria Gonzales",
+      "email": "maria.gonzales@school.ph",
+      "subject": "You're invited: Advanced Physics Pedagogy Workshop",
+      "body": "Dear Maria,\n\nWe are pleased to invite you to our Advanced Physics Pedagogy Workshop specifically designed for Grade 9-10 Physics teachers...\n\nBest regards,\nPHOLARIS Team"
+    }
+  ],
+  "generated_at": "2026-04-03T15:35:00Z"
+}
+```
+
+### Score Pending Sentiment Feedback
+
+**Endpoint:** `POST ai/score-pending-sentiments`  
+**Description:** Batch process and score all unscored event sentiment submissions using AI  
+**Authentication:** Admin
+
+**Response (200 OK):**
+
+```json
+{
+  "scored": 87,
+  "summary": {
+    "positive_count": 62,
+    "neutral_count": 18,
+    "negative_count": 7,
+    "average_score": 0.68
+  },
+  "processed_at": "2026-04-03T15:40:00Z"
 }
 ```
 

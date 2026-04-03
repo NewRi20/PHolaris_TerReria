@@ -7,7 +7,7 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.database import async_session, get_db
-from app.routers import auth, teachers, events, analytics, maps, admin
+from app.routers import auth, teachers, events, analytics, maps, admin, ai
 from app.services.analytics_cache import get_analytics_snapshot, get_cache_meta
 from app.services.event_service import void_stale_events
 
@@ -96,6 +96,7 @@ app.include_router(events.router)
 app.include_router(analytics.router)
 app.include_router(maps.router)
 app.include_router(admin.router)
+app.include_router(ai.router)
 
 
 @app.get("/health")
