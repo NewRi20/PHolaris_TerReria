@@ -75,8 +75,11 @@ def parse_teacher_upload(file_bytes: bytes, filename: str) -> list[dict[str, Any
     rows: list[dict[str, Any]] = []
 
     for idx, raw in enumerate(df.to_dict(orient="records"), start=2):
-        email = _first_present(raw, ["email", "Email", "teacher_email"])
-        full_name = _first_present(raw, ["full_name", "name", "Full Name", "teacher_name"], "")
+        # Normalize to string-keyed mapping for predictable typing and lookups.
+        row: dict[str, Any] = {str(k): v for k, v in raw.items()}
+
+        email = _first_present(row, ["email", "Email", "teacher_email"])
+        full_name = _first_present(row, ["full_name", "name", "Full Name", "teacher_name"], "")
 
         if not email:
             raise ValueError(f"Missing email at row {idx}")
@@ -85,24 +88,23 @@ def parse_teacher_upload(file_bytes: bytes, filename: str) -> list[dict[str, Any
             {
                 "email": str(email).strip().lower(),
                 "full_name": str(full_name).strip() if full_name else "",
-                "teacher_id_number": _first_present(raw, ["teacher_id_number", "teacher_id", "id_number"]),
-                "school": _first_present(raw, ["school", "School"]),
-                "region": _first_present(raw, ["region", "Region"]),
-                "division": _first_present(raw, ["division", "Division"]),
-                "province": _first_present(raw, ["province", "Province"]),
-                "grade_level_taught": _first_present(raw, ["grade_level_taught", "grade_level", "grade"]),
-                "current_subject": _first_present(raw, ["current_subject", "subject", "Subject"]),
-                "specialization": _first_present(raw, ["specialization", "major"]),
+                "teacher_id_number": _first_present(row, ["teacher_id_number", "teacher_id", "id_number"]),
+                "school": _first_present(row, ["school", "School"]),
+                "region": _first_present(row, ["region", "Region"]),
+                "province": _first_present(row, ["province", "Province", "division", "Division"]),
+                "grade_level_taught": _first_present(row, ["grade_level_taught", "grade_level", "grade"]),
+                "current_subject": _first_present(row, ["current_subject", "subject", "Subject"]),
+                "specialization": _first_present(row, ["specialization", "major"]),
                 "teaching_outside_specialization": _to_bool(
-                    _first_present(raw, ["teaching_outside_specialization", "out_of_field"]), False
+                    _first_present(row, ["teaching_outside_specialization", "out_of_field"]), False
                 ),
-                "years_experience": _to_int(_first_present(raw, ["years_experience", "experience_years"])),
-                "num_classes": _to_int(_first_present(raw, ["num_classes", "class_count"])),
+                "years_experience": _to_int(_first_present(row, ["years_experience", "experience_years"])),
+                "num_classes": _to_int(_first_present(row, ["num_classes", "class_count"])),
                 "students_per_class": _to_students_list(
-                    _first_present(raw, ["students_per_class", "class_sizes", "students"])
+                    _first_present(row, ["students_per_class", "class_sizes", "students"])
                 ),
                 "working_hours_per_week": _to_float(
-                    _first_present(raw, ["working_hours_per_week", "weekly_hours"])
+                    _first_present(row, ["working_hours_per_week", "weekly_hours"])
                 ),
             }
         )
