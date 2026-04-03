@@ -1,6 +1,6 @@
-# POLARIS Backend
+# PHOLARIS Backend
 
-Backend for the DOST STAR (Science Teacher Academy for the Regions) system.
+Backend for the DOST STAR (Science Teacher Academy for the Regions) system hackathon.
 This project focuses on teacher profiling, underserved-area analytics, event workflows, map views, and admin operations.
 
 It is built with FastAPI, SQLAlchemy Async, Neon PostgreSQL, Alembic, and planned AI/email integrations.
@@ -12,7 +12,7 @@ python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 copy .env.example .env
-alembic upgrade head
+alembic upgrade head (DONT RUN THIS ON PRODUCTION!!!!)
 uvicorn app.main:app --reload
 ```
 
