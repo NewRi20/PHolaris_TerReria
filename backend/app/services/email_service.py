@@ -49,7 +49,7 @@ def _matches_event(event: Event, profile: TeacherProfile) -> bool:
 
     if event.target_regions and profile.region not in event.target_regions:
         return False
-    if event.target_divisions and profile.division not in event.target_divisions:
+    if event.target_provinces and profile.province not in event.target_provinces:
         return False
     if event.target_subject and profile.current_subject not in {event.target_subject, profile.current_subject}:
         return False
