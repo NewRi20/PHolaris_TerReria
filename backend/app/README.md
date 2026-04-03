@@ -80,14 +80,14 @@ Authorization: Bearer <access_token>
 ### Login
 
 **Endpoint:** `POST /auth/login`  
-**Description:** Authenticate a user and return JWT tokens  
+**Description:** Authenticate a teacher or admin using a single identifier field (`email`, `teacher_id_number`, or `admin_id`) and return JWT tokens  
 **Authentication:** Not required
 
 **Request Body:**
 
 ```json
 {
-  "email": "teacher1@example.com",
+  "identifier": "teacher1@example.com",
   "password": "Password123!"
 }
 ```
@@ -158,10 +158,42 @@ Authorization: Bearer <access_token>
 {
   "profile": {
     "id": "<uuid>",
-    "region": "Region IV-A"
+    "user_id": "<uuid>",
+    "teacher_id_number": "PSA-2026-001",
+    "school": "Manila Science High School",
+    "region": "NCR",
+    "province": "National Capital Region",
+    "grade_level_taught": "Grade 9",
+    "current_subject": "Physics",
+    "specialization": "Physics",
+    "teaching_outside_specialization": false,
+    "years_experience": 5,
+    "num_classes": 3,
+    "students_per_class": [35, 40, 38],
+    "working_hours_per_week": 40.0,
+    "last_training_date": "2026-03-15",
+    "created_at": "2026-03-01T10:00:00Z",
+    "updated_at": "2026-04-03T15:30:00Z"
   },
-  "trainings": [],
-  "badges": [],
+  "trainings": [
+    {
+      "id": "<uuid>",
+      "training_name": "Physics Pedagogy Workshop",
+      "training_type": "Workshop",
+      "subject_area": "Physics",
+      "date_attended": "2026-03-15",
+      "duration_days": null,
+      "location": null
+    }
+  ],
+  "badges": [
+    {
+      "id": "<uuid>",
+      "badge_name": "Completed: Physics Pedagogy Workshop",
+      "description": "Completed training on 2026-03-15",
+      "awarded_at": "2026-03-15T10:00:00Z"
+    }
+  ],
   "email": "teacher1@example.com",
   "full_name": "Teacher One"
 }
@@ -170,16 +202,26 @@ Authorization: Bearer <access_token>
 ### Update own teacher profile
 
 **Endpoint:** `PUT /teachers/me`  
-**Description:** Update the current teacher profile  
+**Description:** Update the current teacher profile (supports partial updates)  
 **Authentication:** Teacher
 
-**Request Body:**
+**Request Body (all fields optional):**
 
 ```json
 {
-  "region": "Region IV-A",
-  "division": "Laguna",
-  "current_subject": "Physics"
+  "teacher_id_number": "PSA-2026-001",
+  "school": "Manila Science High School",
+  "region": "NCR",
+  "province": "National Capital Region",
+  "grade_level_taught": "Grade 9",
+  "current_subject": "Physics",
+  "specialization": "Physics",
+  "teaching_outside_specialization": false,
+  "years_experience": 5,
+  "num_classes": 3,
+  "students_per_class": [35, 40, 38],
+  "working_hours_per_week": 40.0,
+  "last_training_date": "2026-03-15"
 }
 ```
 
@@ -188,9 +230,22 @@ Authorization: Bearer <access_token>
 ```json
 {
   "id": "<uuid>",
-  "region": "Region IV-A",
-  "division": "Laguna",
-  "current_subject": "Physics"
+  "user_id": "<uuid>",
+  "teacher_id_number": "PSA-2026-001",
+  "school": "Manila Science High School",
+  "region": "NCR",
+  "province": "National Capital Region",
+  "grade_level_taught": "Grade 9",
+  "current_subject": "Physics",
+  "specialization": "Physics",
+  "teaching_outside_specialization": false,
+  "years_experience": 5,
+  "num_classes": 3,
+  "students_per_class": [35, 40, 38],
+  "working_hours_per_week": 40.0,
+  "last_training_date": "2026-03-15",
+  "created_at": "2026-03-01T10:00:00Z",
+  "updated_at": "2026-04-03T15:30:00Z"
 }
 ```
 
@@ -207,7 +262,9 @@ Authorization: Bearer <access_token>
   "training_name": "Physics Pedagogy Workshop",
   "training_type": "Workshop",
   "subject_area": "Physics",
-  "date_attended": "2026-03-15"
+  "date_attended": "2026-03-15",
+  "duration_days": null,
+  "location": null
 }
 ```
 
@@ -216,8 +273,14 @@ Authorization: Bearer <access_token>
 ```json
 {
   "id": "<uuid>",
+  "teacher_id": "<uuid>",
   "training_name": "Physics Pedagogy Workshop",
-  "subject_area": "Physics"
+  "training_type": "Workshop",
+  "subject_area": "Physics",
+  "date_attended": "2026-03-15",
+  "duration_days": null,
+  "location": null,
+  "created_at": "2026-04-03T15:30:00Z"
 }
 ```
 
@@ -227,11 +290,44 @@ Authorization: Bearer <access_token>
 **Description:** List all trainings for the authenticated teacher  
 **Authentication:** Teacher
 
+**Response (200 OK):**
+
+```json
+[
+  {
+    "id": "<uuid>",
+    "teacher_id": "<uuid>",
+    "training_name": "Physics Pedagogy Workshop",
+    "training_type": "Workshop",
+    "subject_area": "Physics",
+    "date_attended": "2026-03-15",
+    "duration_days": null,
+    "location": null,
+    "created_at": "2026-04-03T15:30:00Z"
+  }
+]
+```
+
 ### List own badges
 
 **Endpoint:** `GET /teachers/me/badges`  
 **Description:** List all badges for the authenticated teacher  
 **Authentication:** Teacher
+
+**Response (200 OK):**
+
+```json
+[
+  {
+    "id": "<uuid>",
+    "teacher_id": "<uuid>",
+    "training_id": "<uuid>",
+    "badge_name": "Completed: Physics Pedagogy Workshop",
+    "description": "Completed training on 2026-03-15",
+    "awarded_at": "2026-03-15T10:00:00Z"
+  }
+]
+```
 
 ### List all teachers
 
@@ -243,14 +339,44 @@ Authorization: Bearer <access_token>
 
 - `region` - optional region filter
 - `subject` - optional current subject filter
-- `skip` - pagination offset
-- `limit` - pagination limit
+- `skip` - pagination offset (default: 0)
+- `limit` - pagination limit (default: 50)
+
+**Response (200 OK):**
+
+```json
+[
+  {
+    "id": "<uuid>",
+    "user_id": "<uuid>",
+    "teacher_id_number": "PSA-2026-001",
+    "school": "Manila Science High School",
+    "region": "NCR",
+    "province": "National Capital Region",
+    "grade_level_taught": "Grade 9",
+    "current_subject": "Physics",
+    "specialization": "Physics",
+    "teaching_outside_specialization": false,
+    "years_experience": 5,
+    "num_classes": 3,
+    "students_per_class": [35, 40, 38],
+    "working_hours_per_week": 40.0,
+    "last_training_date": "2026-03-15",
+    "created_at": "2026-03-01T10:00:00Z",
+    "updated_at": "2026-04-03T15:30:00Z"
+  }
+]
+```
 
 ### Get any teacher profile
 
 **Endpoint:** `GET /teachers/{teacher_id}`  
 **Description:** Return any teacher profile, trainings, and badges  
 **Authentication:** Admin
+
+**Response (200 OK):**
+
+Same as `GET /teachers/me` response format above.
 
 ## Event Endpoints
 
@@ -262,11 +388,34 @@ Authorization: Bearer <access_token>
 
 **Query Parameters:**
 
-- `status`
-- `region`
-- `timeline`
-- `skip`
-- `limit`
+- `status` - optional (draft, voting, approved, completed, voided)
+- `region` - optional region filter
+- `timeline` - optional (past, upcoming, all)
+- `skip` - pagination offset (default: 0)
+- `limit` - pagination limit (default: 50)
+
+**Response (200 OK):**
+
+```json
+{
+  "total": 10,
+  "items": [
+    {
+      "id": "<uuid>",
+      "title": "Physics Teachers Workshop",
+      "slug": "physics-workshop-2026",
+      "description": "Advanced pedagogy for physics",
+      "status": "approved",
+      "target_subject": "Physics",
+      "target_regions": ["NCR"],
+      "target_provinces": ["National Capital Region"],
+      "event_date": "2026-05-15T09:00:00Z",
+      "location": "Manila Convention Center",
+      "created_at": "2026-04-01T10:00:00Z"
+    }
+  ]
+}
+```
 
 ### Get a specific event
 
@@ -274,23 +423,95 @@ Authorization: Bearer <access_token>
 **Description:** Return full event details  
 **Authentication:** Not required
 
+**Response (200 OK):**
+
+```json
+{
+  "id": "<uuid>",
+  "title": "Physics Teachers Workshop",
+  "slug": "physics-workshop-2026",
+  "description": "Advanced pedagogy for physics",
+  "event_type": "Workshop",
+  "status": "approved",
+  "target_subject": "Physics",
+  "target_subject_branch": null,
+  "target_grade_levels": ["Grade 9", "Grade 10"],
+  "target_regions": ["NCR"],
+  "target_provinces": ["National Capital Region"],
+  "target_audience_criteria": null,
+  "recommended_format": "In-person",
+  "priority_timeline": "immediate",
+  "learning_objectives": ["Master modern physics teaching techniques"],
+  "suggested_topics": ["Quantum mechanics", "Thermodynamics"],
+  "event_date": "2026-05-15T09:00:00Z",
+  "location": "Manila Convention Center",
+  "rsvp_deadline": "2026-05-08T23:59:59Z",
+  "created_at": "2026-04-01T10:00:00Z",
+  "updated_at": "2026-04-03T15:30:00Z"
+}
+```
+
 ### Create an event
 
 **Endpoint:** `POST /events/`  
 **Description:** Create a new event manually  
 **Authentication:** Admin
 
+**Request Body:**
+
+```json
+{
+  "title": "Physics Teachers Workshop",
+  "slug": "physics-workshop-2026",
+  "description": "Advanced pedagogy for physics",
+  "event_type": "Workshop",
+  "target_subject": "Physics",
+  "target_grade_levels": ["Grade 9", "Grade 10"],
+  "target_regions": ["NCR"],
+  "target_provinces": ["National Capital Region"],
+  "recommended_format": "In-person",
+  "priority_timeline": "immediate",
+  "learning_objectives": ["Master modern physics teaching techniques"],
+  "suggested_topics": ["Quantum mechanics", "Thermodynamics"],
+  "event_date": "2026-05-15T09:00:00Z",
+  "location": "Manila Convention Center",
+  "rsvp_deadline": "2026-05-08T23:59:59Z"
+}
+```
+
+**Response (201 Created):**
+
+Same structure as Get a specific event above.
+
 ### Update an event
 
 **Endpoint:** `PUT /events/{event_id}`  
-**Description:** Update event fields  
+**Description:** Update event fields (supports partial updates)  
 **Authentication:** Admin
+
+**Request Body (all fields optional):**
+
+```json
+{
+  "title": "Physics Teachers Advanced Workshop",
+  "description": "Updated description",
+  "status": "voting",
+  "target_provinces": ["National Capital Region", "Laguna"],
+  "event_date": "2026-05-20T09:00:00Z"
+}
+```
+
+**Response (200 OK):**
+
+Same structure as Get a specific event above.
 
 ### Void an event
 
 **Endpoint:** `DELETE /events/{event_id}`  
-**Description:** Void an event  
+**Description:** Void an event (mark as voided)  
 **Authentication:** Admin
+
+**Response (204 No Content)**
 
 ### Approve an event
 
@@ -298,11 +519,26 @@ Authorization: Bearer <access_token>
 **Description:** Mark an event as approved  
 **Authentication:** Admin
 
+**Response (200 OK):**
+
+Same structure as Get a specific event above.
+
 ### Send invitations
 
 **Endpoint:** `POST /events/{event_id}/send-invitations`  
 **Description:** Trigger targeted invitation delivery for an event  
 **Authentication:** Admin
+
+**Response (200 OK):**
+
+```json
+{
+  "message": "Invitations sent",
+  "event_id": "<uuid>",
+  "recipients_count": 42,
+  "failed_count": 0
+}
+```
 
 ### Vote on an event
 
@@ -361,11 +597,41 @@ Authorization: Bearer <access_token>
 **Description:** Return vote records for an event  
 **Authentication:** Admin
 
+**Response (200 OK):**
+
+```json
+[
+  {
+    "id": "<uuid>",
+    "event_id": "<uuid>",
+    "user_id": "<uuid>",
+    "vote": "approve",
+    "created_at": "2026-04-03T15:30:00Z"
+  }
+]
+```
+
 ### List RSVPs
 
 **Endpoint:** `GET /events/{event_id}/rsvps`  
 **Description:** Return RSVP records for an event  
 **Authentication:** Admin
+
+**Response (200 OK):**
+
+```json
+[
+  {
+    "id": "<uuid>",
+    "event_id": "<uuid>",
+    "teacher_id": "<uuid>",
+    "interested": true,
+    "attended": false,
+    "created_at": "2026-04-03T15:30:00Z",
+    "updated_at": "2026-04-03T15:30:00Z"
+  }
+]
+```
 
 ### Submit event sentiment
 
@@ -399,6 +665,21 @@ Authorization: Bearer <access_token>
 **Description:** List sentiment entries for an event  
 **Authentication:** Admin
 
+**Response (200 OK):**
+
+```json
+[
+  {
+    "id": "<uuid>",
+    "event_id": "<uuid>",
+    "teacher_id": "<uuid>",
+    "sentiment_text": "This event is highly needed for Grade 9.",
+    "sentiment_score": 0.85,
+    "created_at": "2026-04-03T15:30:00Z"
+  }
+]
+```
+
 ## AI Endpoints
 
 ### Generate AI Event Proposals
@@ -407,17 +688,57 @@ Authorization: Bearer <access_token>
 **Description:** Analyze metrics and generate event recommendations using Gemini  
 **Authentication:** Admin
 
+**Response (200 OK):**
+
+```json
+{
+  "generated_events": [
+    {
+      "title": "Physics Teachers Workshop",
+      "slug": "physics-workshop-2026",
+      "description": "Workshop to address physics teaching gaps",
+      "target_subject": "Physics",
+      "target_regions": ["NCR"],
+      "target_provinces": ["National Capital Region"],
+      "ai_rationale": {
+        "reason": "High specialization gap identified",
+        "confidence": 0.92
+      }
+    }
+  ],
+  "analysis_timestamp": "2026-04-03T15:30:00Z"
+}
+```
+
 ### Get AI Recommendations
 
 **Endpoint:** `GET /ai/recommendations`  
 **Description:** Return the latest cached AI recommendations  
 **Authentication:** Admin
 
+**Response (200 OK):**
+
+Same structure as Generate AI Event Proposals above.
+
 ### Generate Invitation Emails
 
 **Endpoint:** `POST /ai/generate-invitations/{event_id}`  
 **Description:** Draft customized invitation emails using AI based on event constraints  
 **Authentication:** Admin
+
+**Response (200 OK):**
+
+```json
+{
+  "event_id": "<uuid>",
+  "invitations_generated": 42,
+  "sample_invitation": {
+    "recipient": "teacher1@example.com",
+    "subject": "You're invited: Physics Teachers Workshop",
+    "body": "Dear Physics Teacher,\n\nWe would like to invite you to our upcoming Physics Teachers Workshop..."
+  }
+}
+```
 
 ## Analytics Endpoints
 
@@ -427,33 +748,101 @@ Authorization: Bearer <access_token>
 **Description:** Return dashboard summary for all regions  
 **Authentication:** Admin
 
+**Response (200 OK):**
+
+```json
+{
+  "total_teachers": 1250,
+  "total_trainings": 356,
+  "average_experience_years": 7.2,
+  "regional_readiness": 0.72,
+  "regional_summary": [
+    {
+      "region": "NCR",
+      "teacher_count": 285,
+      "readiness_score": 0.85,
+      "specialization_proximity": 0.92
+    }
+  ]
+}
+```
+
 ### Get region metrics
 
 **Endpoint:** `GET /analytics/region/{region}`  
 **Description:** Return combined metrics for a single region  
 **Authentication:** Admin
 
+**Response (200 OK):**
+
+```json
+{
+  "region": "NCR",
+  "metrics": {
+    "specialization_proximity": 0.92,
+    "training_drought": 45,
+    "experience_void": 0.15,
+    "instructional_risk": 0.22,
+    "burnout_capacity": 0.68,
+    "subject_gaps": {"Physics": 12, "Chemistry": 8},
+    "training_frequency": 3.2,
+    "uplift_priority": 6.5,
+    "predictive_workforce": 298,
+    "regional_readiness": 0.85
+  },
+  "teacher_count": 285,
+  "last_updated": "2026-04-03T15:30:00Z"
+}
+```
+
 ### Get metric-specific views
 
 **Endpoints:**
 
-- `GET /analytics/specialization-proximity`
-- `GET /analytics/training-drought`
-- `GET /analytics/experience-void`
-- `GET /analytics/instructional-risk`
-- `GET /analytics/burnout-capacity`
-- `GET /analytics/subject-gaps`
-- `GET /analytics/training-frequency`
-- `GET /analytics/uplift-priority`
-- `GET /analytics/predictive-workforce`
-- `GET /analytics/regional-readiness`
-- `GET /analytics/cache-meta`
+- `GET /analytics/specialization-proximity` - ratio of teachers in field vs. out-of-field
+- `GET /analytics/training-drought` - days since last training by region+province
+- `GET /analytics/experience-void` - distribution of inexperienced teachers
+- `GET /analytics/instructional-risk` - workload and burnout indicators
+- `GET /analytics/burnout-capacity` - risk scores for teacher capacity
+- `GET /analytics/subject-gaps` - shortage counts by subject area
+- `GET /analytics/training-frequency` - average trainings per teacher by region
+- `GET /analytics/uplift-priority` - composite priority scores for investment
+- `GET /analytics/predictive-workforce` - projected teacher counts by region
+- `GET /analytics/regional-readiness` - overall readiness aggregated by region
+- `GET /analytics/cache-meta` - metadata about cache freshness and compute time
+
+**Response (200 OK) - varies by metric, example:**
+
+```json
+{
+  "metric_name": "specialization-proximity",
+  "data": [
+    {
+      "region": "NCR",
+      "province": "National Capital Region",
+      "in_field_count": 250,
+      "out_of_field_count": 35,
+      "proximity_ratio": 0.92
+    }
+  ]
+}
+```
 
 ### Refresh analytics cache
 
 **Endpoint:** `POST /analytics/refresh`  
 **Description:** Force refresh the in-memory analytics snapshot  
 **Authentication:** Admin
+
+**Response (200 OK):**
+
+```json
+{
+  "message": "Analytics cache refreshed",
+  "computed_at": "2026-04-03T15:30:00Z",
+  "cache_duration_ms": 1245
+}
+```
 
 ## Maps Endpoints
 
@@ -463,17 +852,95 @@ Authorization: Bearer <access_token>
 **Description:** Return region-level map data including teacher counts, subject breakdown, color coding, readiness, and upcoming events  
 **Authentication:** Not required
 
+**Response (200 OK):**
+
+```json
+{
+  "regions": [
+    {
+      "code": "NCR",
+      "name": "National Capital Region",
+      "teacher_count": 285,
+      "readiness_score": 0.85,
+      "color": "green",
+      "subject_breakdown": {
+        "Physics": 45,
+        "Chemistry": 38,
+        "Biology": 42,
+        "Mathematics": 60,
+        "English": 55,
+        "Other": 45
+      },
+      "upcoming_events_count": 3
+    }
+  ]
+}
+```
+
 ### Get detailed region map view
 
 **Endpoint:** `GET /maps/regions/{region}`  
 **Description:** Return detailed metrics and distributions for one region  
 **Authentication:** Not required
 
+**Response (200 OK):**
+
+```json
+{
+  "region": "NCR",
+  "teacher_count": 285,
+  "readiness_score": 0.85,
+  "metrics": {
+    "specialization_proximity": 0.92,
+    "training_drought": 45,
+    "experience_void": 0.15
+  },
+  "subject_distribution": {
+    "Physics": {"count": 45, "percent": 15.8},
+    "Chemistry": {"count": 38, "percent": 13.3}
+  },
+  "provinces": [
+    {
+      "name": "National Capital Region",
+      "teacher_count": 285,
+      "readiness_score": 0.85
+    }
+  ]
+}
+```
+
 ### Get events grouped by region
 
 **Endpoint:** `GET /maps/events-by-region`  
 **Description:** Return upcoming events grouped by region  
 **Authentication:** Not required
+
+**Response (200 OK):**
+
+```json
+{
+  "events_by_region": {
+    "NCR": [
+      {
+        "id": "<uuid>",
+        "title": "Physics Teachers Workshop",
+        "event_date": "2026-05-15T09:00:00Z",
+        "location": "Manila Convention Center",
+        "rsvp_count": 42
+      }
+    ],
+    "R1": [
+      {
+        "id": "<uuid>",
+        "title": "Science Education Summit",
+        "event_date": "2026-05-20T08:00:00Z",
+        "location": "Dagupan City",
+        "rsvp_count": 28
+      }
+    ]
+  }
+}
+```
 
 ## Admin Endpoints
 
@@ -506,17 +973,79 @@ Authorization: Bearer <access_token>
 **Description:** Return a compact analytics summary for admins  
 **Authentication:** Admin
 
+**Response (200 OK):**
+
+```json
+{
+  "total_teachers": 1250,
+  "total_trainings": 356,
+  "pending_events": 8,
+  "sent_invitations": 2341,
+  "regional_readiness": 0.72,
+  "top_underserved": [
+    {
+      "region": "TCL",
+      "province": "Tarlac",
+      "priority_score": 8.5,
+      "specialization_gap": 12
+    }
+  ]
+}
+```
+
 ### Get underserved areas
 
 **Endpoint:** `GET /admin/underserved-areas`  
-**Description:** Return top underserved regions and divisions by uplift priority  
+**Description:** Return top underserved regions and provinces by uplift priority  
 **Authentication:** Admin
+
+**Response (200 OK):**
+
+```json
+{
+  "top_underserved": [
+    {
+      "region": "TCL",
+      "province": "Tarlac",
+      "uplift_priority": 8.5,
+      "specialization_gap": 12,
+      "training_drought_days": 245,
+      "teacher_count": 156
+    },
+    {
+      "region": "ILO",
+      "province": "Iloilo",
+      "uplift_priority": 7.9,
+      "specialization_gap": 8,
+      "training_drought_days": 198,
+      "teacher_count": 142
+    }
+  ]
+}
+```
 
 ### Manually void stale events
 
 **Endpoint:** `POST /admin/void-stale-events`  
 **Description:** Void draft or voting events that are close to their event date  
 **Authentication:** Admin
+
+**Request Body:**
+
+```json
+{
+  "days_threshold": 7
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "message": "Stale events voided",
+  "voided_count": 3
+}
+```
 
 ## Important Notes
 
@@ -565,7 +1094,12 @@ curl -X POST http://localhost:8000/api/auth/register \
 # login
 curl -X POST http://localhost:8000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"teacher1@example.com","password":"Password123!"}'
+  -d '{"identifier":"teacher1@example.com","password":"Password123!"}'
+
+# seed admin account (runs interactively, prompting for email, password, and full name)
+python scripts/seed_admin.py
+# You will be prompted to enter admin email, password, and full name
+# Admin ID will be auto-generated
 
 # health
 curl http://localhost:8000/health
