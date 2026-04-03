@@ -4,12 +4,20 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 from math import ceil
 from statistics import median
+from typing import TypedDict
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.teacher_profile import TeacherProfile
 from app.models.training import Training
+
+
+class _RiskBucket(TypedDict):
+	area_name: str
+	area_type: str
+	total: int
+	flagged: int
 
 
 def _months_since(d: date) -> float:
@@ -59,16 +67,16 @@ async def training_drought_index(db: AsyncSession) -> list[dict]:
 	DroughtIndex = (MedianMonths / 36) * 0.6 + (ZeroTrainingRate / 100) * 0.4
 	"""
 	result = await db.execute(
-		select(TeacherProfile.region, TeacherProfile.division, TeacherProfile.last_training_date)
-		.where(TeacherProfile.region.is_not(None), TeacherProfile.division.is_not(None))
+		select(TeacherProfile.region, TeacherProfile.province, TeacherProfile.last_training_date)
+		.where(TeacherProfile.region.is_not(None), TeacherProfile.province.is_not(None))
 	)
 
 	grouped: dict[tuple[str, str], list[date | None]] = defaultdict(list)
-	for region, division, last_training_date in result.all():
-		grouped[(region, division)].append(last_training_date)
+	for region, province, last_training_date in result.all():
+		grouped[(region, province)].append(last_training_date)
 
 	rows: list[dict] = []
-	for (region, division), dates in grouped.items():
+	for (region, province), dates in grouped.items():
 		total = len(dates)
 		months_values = [_months_since(d) for d in dates if d is not None]
 		median_months = float(median(months_values)) if months_values else 120.0
@@ -84,7 +92,7 @@ async def training_drought_index(db: AsyncSession) -> list[dict]:
 		rows.append(
 			{
 				"region": region,
-				"division": division,
+				"province": province,
 				"teacher_count": total,
 				"median_months_since_last_training": round(median_months, 2),
 				"zero_training_rate": round(zero_training_rate, 2),
@@ -150,7 +158,7 @@ async def instructional_risk_index(db: AsyncSession) -> list[dict]:
 		.where(TeacherProfile.region.is_not(None))
 	)
 
-	grouped: dict[str, dict[str, int | str]] = defaultdict(
+	grouped: dict[str, _RiskBucket] = defaultdict(
 		lambda: {"area_name": "", "area_type": "school", "total": 0, "flagged": 0}
 	)
 
@@ -561,7 +569,7 @@ async def region_metric_detail(db: AsyncSession, region: str) -> dict:
 	readiness = await regional_readiness_score(db)
 	predictive = await predictive_workforce_model(db)
 
-	def _pick(items: list[dict], key: str, default=0.0):
+	def _pick(items: list[dict], key: str, default=None):
 		for item in items:
 			if item.get("region") == region:
 				return item.get(key, default)
