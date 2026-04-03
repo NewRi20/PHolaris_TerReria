@@ -1,11 +1,17 @@
 import uuid
 from datetime import datetime, date
+from typing import TYPE_CHECKING
 
 from sqlalchemy import String, Boolean, Integer, Float, ForeignKey, Date
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 
 from app.database import Base
+
+if TYPE_CHECKING:
+    from app.models.badge import Badge
+    from app.models.training import Training
+    from app.models.user import User
 
 
 class TeacherProfile(Base):
@@ -16,7 +22,6 @@ class TeacherProfile(Base):
     teacher_id_number: Mapped[str] = mapped_column(String(50), nullable=True)
     school: Mapped[str] = mapped_column(String(255), nullable=True)
     region: Mapped[str] = mapped_column(String(100), nullable=True, index=True)
-    division: Mapped[str] = mapped_column(String(100), nullable=True, index=True)
     province: Mapped[str] = mapped_column(String(100), nullable=True)
     grade_level_taught: Mapped[str] = mapped_column(String(50), nullable=True)
     current_subject: Mapped[str] = mapped_column(String(100), nullable=True, index=True)

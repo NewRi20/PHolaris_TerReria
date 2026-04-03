@@ -1,11 +1,15 @@
 import uuid
 from datetime import datetime, date
+from typing import TYPE_CHECKING
 
 from sqlalchemy import String, Boolean, Integer, Text, ForeignKey, Enum as SAEnum, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID, JSONB, TIMESTAMP
 
 from app.database import Base
+
+if TYPE_CHECKING:
+    from app.models.sentiment import EventSentiment
 
 
 class Event(Base):
@@ -20,7 +24,7 @@ class Event(Base):
     target_subject_branch: Mapped[str] = mapped_column(String(100), nullable=True)
     target_grade_levels: Mapped[dict] = mapped_column(JSONB, nullable=True)
     target_regions: Mapped[dict] = mapped_column(JSONB, nullable=True)
-    target_divisions: Mapped[dict] = mapped_column(JSONB, nullable=True)
+    target_provinces: Mapped[dict] = mapped_column(JSONB, nullable=True)
     target_audience_criteria: Mapped[dict] = mapped_column(JSONB, nullable=True)
     recommended_format: Mapped[str] = mapped_column(String(100), nullable=True)
     priority_timeline: Mapped[str] = mapped_column(String(50), nullable=True)
