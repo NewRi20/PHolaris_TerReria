@@ -159,7 +159,7 @@ async def get_teacher(
 
 # ─── Helpers ─────────────────────────────────────────────────
 
-async def _get_profile(db: AsyncSession, *, user_id: UUID = None, profile_id: UUID = None) -> TeacherProfile | None:
+async def _get_profile(db: AsyncSession, *, user_id: UUID | None = None, profile_id: UUID | None = None) -> TeacherProfile | None:
     if user_id:
         result = await db.execute(select(TeacherProfile).where(TeacherProfile.user_id == user_id))
     else:
@@ -167,7 +167,7 @@ async def _get_profile(db: AsyncSession, *, user_id: UUID = None, profile_id: UU
     return result.scalar_one_or_none()
 
 
-async def _get_profile_with_relations(db: AsyncSession, *, user_id: UUID = None, profile_id: UUID = None) -> TeacherProfile | None:
+async def _get_profile_with_relations(db: AsyncSession, *, user_id: UUID | None = None, profile_id: UUID | None = None) -> TeacherProfile | None:
     query = select(TeacherProfile).options(selectinload(TeacherProfile.trainings), selectinload(TeacherProfile.badges))
     if user_id:
         query = query.where(TeacherProfile.user_id == user_id)

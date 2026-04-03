@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -43,11 +43,27 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.email == body.email))
+    identifier = body.identifier.strip()
+    if not identifier:
+        raise HTTPException(status_code=400, detail="Identifier is required")
+
+    identifier_lower = identifier.lower()
+    stmt = (
+        select(User)
+        .outerjoin(TeacherProfile, TeacherProfile.user_id == User.id)
+        .where(
+            or_(
+                func.lower(User.email) == identifier_lower,
+                User.admin_id == identifier,
+                TeacherProfile.teacher_id_number == identifier,
+            )
+        )
+    )
+    result = await db.execute(stmt)
     user = result.scalar_one_or_none()
 
     if not user or not verify_password(body.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account is deactivated")

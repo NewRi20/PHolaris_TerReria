@@ -54,7 +54,6 @@ async def upload_teachers(
             teacher_id_number=row.get("teacher_id_number"),
             school=row.get("school"),
             region=row.get("region"),
-            division=row.get("division"),
             province=row.get("province"),
             grade_level_taught=row.get("grade_level_taught"),
             current_subject=row.get("current_subject"),
