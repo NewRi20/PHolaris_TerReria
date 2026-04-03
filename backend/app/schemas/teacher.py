@@ -9,7 +9,6 @@ class TeacherProfileUpdate(BaseModel):
     teacher_id_number: Optional[str] = None
     school: Optional[str] = None
     region: Optional[str] = None
-    division: Optional[str] = None
     province: Optional[str] = None
     grade_level_taught: Optional[str] = None
     current_subject: Optional[str] = None
@@ -28,7 +27,6 @@ class TeacherProfileResponse(BaseModel):
     teacher_id_number: Optional[str] = None
     school: Optional[str] = None
     region: Optional[str] = None
-    division: Optional[str] = None
     province: Optional[str] = None
     grade_level_taught: Optional[str] = None
     current_subject: Optional[str] = None

@@ -93,7 +93,7 @@ class TrainingFrequencyItem(BaseModel):
 class UpliftPriorityItem(BaseModel):
     rank: int
     region: str
-    division: Optional[str] = None
+    province: Optional[str] = None
     priority_score: float
     primary_problem: Optional[str] = None
     supporting_problems: list[str] = []

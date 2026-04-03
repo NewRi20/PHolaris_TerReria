@@ -13,7 +13,7 @@ class EventCreate(BaseModel):
     target_subject_branch: Optional[str] = None
     target_grade_levels: Optional[list[str]] = None
     target_regions: Optional[list[str]] = None
-    target_divisions: Optional[list[str]] = None
+    target_provinces: Optional[list[str]] = None
     target_audience_criteria: Optional[dict] = None
     recommended_format: Optional[str] = None
     priority_timeline: Optional[str] = None
@@ -43,7 +43,7 @@ class EventUpdate(BaseModel):
     target_subject_branch: Optional[str] = None
     target_grade_levels: Optional[list[str]] = None
     target_regions: Optional[list[str]] = None
-    target_divisions: Optional[list[str]] = None
+    target_provinces: Optional[list[str]] = None
     target_audience_criteria: Optional[dict] = None
     recommended_format: Optional[str] = None
     priority_timeline: Optional[str] = None
@@ -76,7 +76,7 @@ class EventResponse(BaseModel):
     target_subject_branch: Optional[str] = None
     target_grade_levels: Optional[list[str]] = None
     target_regions: Optional[list[str]] = None
-    target_divisions: Optional[list[str]] = None
+    target_provinces: Optional[list[str]] = None
     target_audience_criteria: Optional[dict] = None
     recommended_format: Optional[str] = None
     priority_timeline: Optional[str] = None
@@ -112,7 +112,7 @@ class AIEventRecommendation(BaseModel):
     target_subject_branch: Optional[str] = None
     target_grade_levels: list[str] = []
     target_regions: list[str] = []
-    target_divisions: list[str] = []
+    target_provinces: list[str] = []
     target_audience_criteria: dict = {}
     recommended_format: str
     priority_timeline: str
