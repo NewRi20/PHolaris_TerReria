@@ -1,0 +1,94 @@
+{
+  "regions": [
+    {
+      "code": "R1",
+      "name": "Region I - Ilocos Region",
+      "provinces": ["Ilocos Norte", "Ilocos Sur", "La Union", "Pangasinan"]
+    },
+    {
+      "code": "R2",
+      "name": "Region II - Cagayan Valley",
+      "provinces": ["Batanes", "Cagayan", "Isabela", "Nueva Vizcaya", "Quirino"]
+    },
+    {
+      "code": "R3",
+      "name": "Region III - Central Luzon",
+      "provinces": ["Aurora", "Bataan", "Bulacan", "Nueva Ecija", "Pampanga", "Tarlac", "Zambales"]
+    },
+    {
+      "code": "R4A",
+      "name": "Region IV-A - CALABARZON",
+      "provinces": ["Batangas", "Cavite", "Laguna", "Quezon", "Rizal"]
+    },
+    {
+      "code": "MIMAROPA",
+      "name": "MIMAROPA Region",
+      "provinces": ["Marinduque", "Occidental Mindoro", "Oriental Mindoro", "Palawan", "Romblon", "Calapan"]
+    },
+    {
+      "code": "R5",
+      "name": "Region V - Bicol Region",
+      "provinces": ["Albay", "Camarines Norte", "Camarines Sur", "Catanduanes", "Masbate", "Sorsogon"]
+    },
+    {
+      "code": "R6",
+      "name": "Region VI - Western Visayas",
+      "provinces": ["Aklan", "Antique", "Capiz", "Guimaras", "Iloilo"]
+    },
+    {
+      "code": "R7",
+      "name": "Region VII - Central Visayas",
+      "provinces": ["Bohol", "Cebu"]
+    },
+    {
+      "code": "R8",
+      "name": "Region VIII - Eastern Visayas",
+      "provinces": ["Biliran", "Eastern Samar", "Leyte", "Northern Samar", "Samar", "Southern Leyte"]
+    },
+    {
+      "code": "R9",
+      "name": "Region IX - Zamboanga Peninsula",
+      "provinces": ["Zamboanga del Norte", "Zamboanga del Sur", "Zamboanga Sibugay"]
+    },
+    {
+      "code": "R10",
+      "name": "Region X - Northern Mindanao",
+      "provinces": ["Bukidnon", "Camiguin", "Lanao del Norte", "Misamis Occidental", "Misamis Oriental"]
+    },
+    {
+      "code": "R11",
+      "name": "Region XI - Davao Region",
+      "provinces": ["Davao de Oro (Compostela Valley)", "Davao del Norte", "Davao del Sur", "Davao Occidental", "Davao Oriental"]
+    },
+    {
+      "code": "R12",
+      "name": "Region XII - SOCCSKSARGEN",
+      "provinces": ["Cotabato", "Sarangani", "South Cotabato", "Sultan Kudarat"]
+    },
+    {
+      "code": "R13",
+      "name": "Region XIII - Caraga",
+      "provinces": ["Agusan del Norte", "Agusan del Sur", "Dinagat Islands", "Surigao del Norte", "Surigao del Sur"]
+    },
+    {
+      "code": "NCR",
+      "name": "NCR - National Capital Region",
+      "provinces": ["Caloocan", "Las Pinas", "Makati", "Malabon", "Mandaluyong", "Manila", "Marikina", "Muntinlupa", "Navotas", "Paranaque", "Pasay", "Pasig", "Pateros", "Quezon City", "San Juan", "Taguig", "Valenzuela"]
+    },
+    {
+      "code": "CAR",
+      "name": "CAR - Cordillera Administrative Region",
+      "provinces": ["Abra", "Apayao", "Benguet", "Ifugao", "Kalinga", "Mountain Province", "Baguio"]
+    },
+    {
+      "code": "BARMM",
+      "name": "BARMM - Bangsamoro Autonomous Region in Muslim Mindanao",
+      "provinces": ["Basilan", "Lanao del Sur", "Maguindanao del Norte", "Maguindanao del Sur", "Sulu", "Tawi-Tawi"]
+    },
+    {
+      "code": "NIR",
+      "name": "NIR - Negros Island Region",
+      "provinces": ["Negros Occidental", "Negros Oriental", "Siquijor"]
+    }
+  ]
+}
