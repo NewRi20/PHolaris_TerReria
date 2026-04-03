@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, date
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -269,6 +269,15 @@ async def approve_events(
         to_save = [e for e in cached if e.get("slug") in request.event_slugs]
         
         for event_data in to_save:
+            # Parse date fields if they're strings
+            suggested_date_earliest = event_data.get("suggested_date_earliest")
+            if suggested_date_earliest and isinstance(suggested_date_earliest, str):
+                suggested_date_earliest = datetime.fromisoformat(suggested_date_earliest).date()
+            
+            suggested_date_latest = event_data.get("suggested_date_latest")
+            if suggested_date_latest and isinstance(suggested_date_latest, str):
+                suggested_date_latest = datetime.fromisoformat(suggested_date_latest).date()
+            
             # Create Event instance
             new_event = Event(
                 title=event_data.get("title"),
@@ -283,6 +292,15 @@ async def approve_events(
                 target_audience_criteria=event_data.get("target_audience_criteria"),
                 recommended_format=event_data.get("recommended_format"),
                 priority_timeline=event_data.get("priority_timeline"),
+                expected_impact=event_data.get("expected_impact"),
+                learning_objectives=event_data.get("learning_objectives"),
+                suggested_topics=event_data.get("suggested_topics"),
+                format_justification=event_data.get("format_justification"),
+                tags=event_data.get("tags"),
+                suggested_duration_days=event_data.get("suggested_duration_days"),
+                suggested_date_earliest=suggested_date_earliest,
+                suggested_date_latest=suggested_date_latest,
+                location=event_data.get("location"),
                 ai_generated=event_data.get("ai_generated", True),
                 ai_rationale=event_data.get("ai_rationale"),
                 ai_analysis_snapshot=event_data.get("ai_analysis_snapshot"),

@@ -251,7 +251,7 @@ Return ONLY a valid JSON object with this format (no markdown, no explanation):
     
     try:
         response = client.models.generate_content(
-            model="2",
+            model="gemini-2.5-flash",
             contents=prompt
         )
         if not response or not response.text:
@@ -307,7 +307,7 @@ Example: 0.75
     
     try:
         response = client.models.generate_content(
-            model="2",
+            model="gemini-2.5-flash",
             contents=prompt
         )
         if not response or not response.text:
