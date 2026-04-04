@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from typing import cast
+
 from fastapi import FastAPI
+from fastapi.responses import Response
 from starlette.requests import Request
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -44,7 +47,11 @@ def _rate_limit_key(request: Request) -> str:
 limiter = Limiter(key_func=_rate_limit_key, default_limits=[settings.RATE_LIMIT_DEFAULT])
 
 
+def _typed_rate_limit_handler(request: Request, exc: Exception) -> Response:
+    return _rate_limit_exceeded_handler(request, cast(RateLimitExceeded, exc))
+
+
 def init_rate_limiter(app: FastAPI) -> None:
     app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    app.add_exception_handler(RateLimitExceeded, _typed_rate_limit_handler)
     app.add_middleware(SlowAPIMiddleware)
