@@ -1,6 +1,7 @@
 import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import 'leaflet/dist/leaflet.css'; // <-- BRING THIS BACK!
 
 // Import your team's new Context Providers
 import { AuthProvider } from './setup/auth/authContext';
