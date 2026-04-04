@@ -1,14 +1,17 @@
 // src/services/api.ts
 
 // Helper to grab the token if the user is logged in
+// Helper to grab the token if the user is logged in
 const getAuthHeaders = () => {
-  const token = localStorage.getItem('access_token');
+  // Changed to match the key your team used in authContext.tsx!
+  const token = localStorage.getItem('pholaris_access_token'); 
   return {
     'Content-Type': 'application/json',
     ...(token ? { 'Authorization': `Bearer ${token}` } : {})
   };
 };
 
+// ... keep the rest of your api.ts exactly the same ...
 export const api = {
   // --- AUTH ---
   login: async (credentials: any) => {

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 
-// FIX: Corrected import paths based on your actual folder structure
 import AdminLayout from './layouts/AdminLayout';
 import TeacherLayout from './layouts/TeacherLayout';
 
@@ -11,6 +10,7 @@ import TeacherDirectory from "./components/TeacherDirectory";
 import TeacherDashboard from "./components/TeacherDashboard";
 
 function App() {
+  // Set your default starting view here
   const [currentView, setCurrentView] = useState('admin-dashboard');
 
   const renderAdminView = () => {
@@ -23,6 +23,7 @@ function App() {
     }
   };
 
+  // Switch to Teacher Portal view
   if (currentView === 'teacher-portal') {
     return (
       <TeacherLayout currentView={currentView} setCurrentView={setCurrentView}>
@@ -31,6 +32,7 @@ function App() {
     );
   }
 
+  // Default Admin Portal view
   return (
     <AdminLayout currentView={currentView} setCurrentView={setCurrentView}>
       {renderAdminView()}
