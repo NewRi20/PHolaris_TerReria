@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import require_admin
@@ -96,7 +96,8 @@ async def get_training_frequency(
 
 @router.get("/uplift-priority")
 async def get_uplift_priority(
-    top_n: int = 5,
+    top_n: int = Query(default=5, ge=1, le=50),
+    admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     await get_analytics_snapshot(db)
