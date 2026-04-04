@@ -1,8 +1,6 @@
 import { createContext, useState } from "react";
 
 //Types
-export type full_name = string;
-export type role = "teacher" | "admin";
 export type teacherName = string;
 export type teacher_id_number = string;
 export type school = string;
@@ -22,8 +20,6 @@ export type trainingsAttended = string[];
 
 //Data Shape
 interface OnboardingData {
-    full_name: full_name;
-    role: role;
     teacherName: teacherName;
     teacher_id_number: teacher_id_number;
     school: school;
@@ -35,10 +31,9 @@ interface OnboardingData {
     teaching_outside_specialization: teaching_outside_specialization;
     years_experience: years_experience;
     num_classes: num_classes;
-    student_per_class: student_per_class;
+    students_per_class: student_per_class;
     working_hours_per_week: working_hours_per_week;
     last_training_date: last_training_date;
-    trainingsAttended: trainingsAttended;
 }
 
 
@@ -51,8 +46,6 @@ interface OnboardingContextType {
 }
 
 const initialData: OnboardingData = {
-    full_name: "",
-    role: "teacher",
     teacherName: "",
     teacher_id_number: "",
     school: "",
@@ -64,10 +57,9 @@ const initialData: OnboardingData = {
     teaching_outside_specialization: false,
     years_experience: 0,
     num_classes: 0,
-    student_per_class: [],
+    students_per_class: [],
     working_hours_per_week: 0,
     last_training_date: new Date(),
-    trainingsAttended: [],
 };
 
 export const OnboardingContext = createContext<OnboardingContextType | undefined>(undefined);
