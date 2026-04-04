@@ -8,3 +8,6 @@ alembic/versions/*.py
 .idea/
 .vscode/
 .context
+.pytest_cache
+tests
+pytest.ini 
