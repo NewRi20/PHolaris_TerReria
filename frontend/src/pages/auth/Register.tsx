@@ -1,18 +1,15 @@
-import regionsData from '@/constant/regions/regions_provinces.json'
 import { useState } from 'react'
-import { Eye, EyeOff, FlaskConical, ChevronDown } from 'lucide-react'
+import { Eye, EyeOff, FlaskConical } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 export default function Register() {
   const [showPassword, setShowPassword] = useState(false)
   const [form, setForm] = useState({
-    fullName: '',
-    email: '',
-    teacherId: '',
-    region: '',
-    schoolName: '',
-    password: '',
-  })
+  fullName: '',
+  email: '',
+  password: '',
+  confirmPassword: '',
+})
 
   const set = (field: keyof typeof form) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -151,163 +148,65 @@ export default function Register() {
                     <div className="w-6 h-6 rounded-full bg-[#001e40] flex items-center justify-center flex-shrink-0">
                       <span className="text-white text-[0.6rem] font-bold">1</span>
                     </div>
-                    <h3
-                      className="text-[#001e40] font-semibold text-sm"
-                      style={{ fontFamily: 'Manrope, sans-serif' }}
-                    >
+                    <h3 className="text-[#001e40] font-semibold text-sm" style={{ fontFamily: 'Manrope, sans-serif' }}>
                       Basic Information
                     </h3>
                   </div>
-
-                  <div className="space-y-3 pl-0">
+                  <div className="space-y-3">
                     <div className="space-y-1.5">
-                      <label
-                        className="text-[0.65rem] font-semibold tracking-widest text-[#44474e] uppercase"
-                        style={{ fontFamily: 'Manrope, sans-serif' }}
-                      >
+                      <label className="text-[0.65rem] font-semibold tracking-widest text-[#44474e] uppercase" style={{ fontFamily: 'Manrope, sans-serif' }}>
                         Full Name
                       </label>
-                      <input
-                        type="text"
-                        placeholder="John Ray Doe"
-                        value={form.fullName}
-                        onChange={set('fullName')}
+                      <input type="text" placeholder="John Ray Doe" value={form.fullName} onChange={set('fullName')}
                         className="w-full px-4 py-2.5 rounded-xl bg-white text-[#1a1c1e] placeholder:text-[#44474e]/30 text-sm outline-none focus:ring-2 focus:ring-[#115cb9]/25 transition-all shadow-[0_1px_4px_rgba(0,30,64,0.06)]"
-                        style={{ fontFamily: 'Inter, sans-serif' }}
-                      />
+                        style={{ fontFamily: 'Inter, sans-serif' }} />
                     </div>
-
                     <div className="space-y-1.5">
-                      <label
-                        className="text-[0.65rem] font-semibold tracking-widest text-[#44474e] uppercase"
-                        style={{ fontFamily: 'Manrope, sans-serif' }}
-                      >
+                      <label className="text-[0.65rem] font-semibold tracking-widest text-[#44474e] uppercase" style={{ fontFamily: 'Manrope, sans-serif' }}>
                         Email Address
                       </label>
-                      <input
-                        type="email"
-                        placeholder="j.doe@school.edu.ph"
-                        value={form.email}
-                        onChange={set('email')}
+                      <input type="email" placeholder="j.doe@school.edu.ph" value={form.email} onChange={set('email')}
                         className="w-full px-4 py-2.5 rounded-xl bg-white text-[#1a1c1e] placeholder:text-[#44474e]/30 text-sm outline-none focus:ring-2 focus:ring-[#115cb9]/25 transition-all shadow-[0_1px_4px_rgba(0,30,64,0.06)]"
-                        style={{ fontFamily: 'Inter, sans-serif' }}
-                      />
+                        style={{ fontFamily: 'Inter, sans-serif' }} />
                     </div>
                   </div>
                 </div>
 
-                {/* Section 2 — Professional Details */}
+                {/* Section 2 — Account Security */}
                 <div className="space-y-4">
                   <div className="flex items-center gap-3">
                     <div className="w-6 h-6 rounded-full bg-[#001e40] flex items-center justify-center flex-shrink-0">
                       <span className="text-white text-[0.6rem] font-bold">2</span>
                     </div>
-                    <h3
-                      className="text-[#001e40] font-semibold text-sm"
-                      style={{ fontFamily: 'Manrope, sans-serif' }}
-                    >
-                      Professional Details
-                    </h3>
-                  </div>
-
-                  <div className="space-y-3 pl-0">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <label
-                          className="text-[0.65rem] font-semibold tracking-widest text-[#44474e] uppercase"
-                          style={{ fontFamily: 'Manrope, sans-serif' }}
-                        >
-                          Teacher ID / LRN
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="ID-2024-XXXX"
-                          value={form.teacherId}
-                          onChange={set('teacherId')}
-                          className="w-full px-4 py-2.5 rounded-xl bg-white text-[#1a1c1e] placeholder:text-[#44474e]/30 text-sm outline-none focus:ring-2 focus:ring-[#115cb9]/25 transition-all shadow-[0_1px_4px_rgba(0,30,64,0.06)]"
-                          style={{ fontFamily: 'Inter, sans-serif' }}
-                        />
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <label
-                          className="text-[0.65rem] font-semibold tracking-widest text-[#44474e] uppercase"
-                          style={{ fontFamily: 'Manrope, sans-serif' }}
-                        >
-                          Region
-                        </label>
-                        <div className="relative">
-                          <select
-                            value={form.region}
-                            onChange={set('region')}
-                            className="w-full px-4 py-2.5 rounded-xl bg-white text-[#1a1c1e] text-sm outline-none focus:ring-2 focus:ring-[#115cb9]/25 transition-all shadow-[0_1px_4px_rgba(0,30,64,0.06)] appearance-none pr-9"
-                            style={{ fontFamily: 'Inter, sans-serif' }}
-                          >
-                            <option value="" disabled>Select Region</option>
-                            {regionsData.regions.map((r) => (
-                                <option key={r.code} value={r.code}>{r.name}</option>
-                            ))}
-                          </select>
-                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#44474e]/40 pointer-events-none" />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label
-                        className="text-[0.65rem] font-semibold tracking-widest text-[#44474e] uppercase"
-                        style={{ fontFamily: 'Manrope, sans-serif' }}
-                      >
-                        School Name
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Philippine Science High School"
-                        value={form.schoolName}
-                        onChange={set('schoolName')}
-                        className="w-full px-4 py-2.5 rounded-xl bg-white text-[#1a1c1e] placeholder:text-[#44474e]/30 text-sm outline-none focus:ring-2 focus:ring-[#115cb9]/25 transition-all shadow-[0_1px_4px_rgba(0,30,64,0.06)]"
-                        style={{ fontFamily: 'Inter, sans-serif' }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Section 3 — Account Security */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-6 h-6 rounded-full bg-[#001e40] flex items-center justify-center flex-shrink-0">
-                      <span className="text-white text-[0.6rem] font-bold">3</span>
-                    </div>
-                    <h3
-                      className="text-[#001e40] font-semibold text-sm"
-                      style={{ fontFamily: 'Manrope, sans-serif' }}
-                    >
+                    <h3 className="text-[#001e40] font-semibold text-sm" style={{ fontFamily: 'Manrope, sans-serif' }}>
                       Account Security
                     </h3>
                   </div>
-
-                  <div className="space-y-3 pl-0">
+                  <div className="space-y-3">
                     <div className="space-y-1.5">
-                      <label
-                        className="text-[0.65rem] font-semibold tracking-widest text-[#44474e] uppercase"
-                        style={{ fontFamily: 'Manrope, sans-serif' }}
-                      >
+                      <label className="text-[0.65rem] font-semibold tracking-widest text-[#44474e] uppercase" style={{ fontFamily: 'Manrope, sans-serif' }}>
                         Password
                       </label>
                       <div className="relative">
-                        <input
-                          type={showPassword ? 'text' : 'password'}
-                          placeholder="••••••••"
-                          value={form.password}
-                          onChange={set('password')}
+                        <input type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={form.password} onChange={set('password')}
                           className="w-full px-4 pr-11 py-2.5 rounded-xl bg-white text-[#1a1c1e] placeholder:text-[#44474e]/30 text-sm outline-none focus:ring-2 focus:ring-[#115cb9]/25 transition-all shadow-[0_1px_4px_rgba(0,30,64,0.06)]"
-                          style={{ fontFamily: 'Inter, sans-serif' }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute inset-y-0 right-3.5 flex items-center text-[#44474e]/40 hover:text-[#44474e] transition-colors"
-                        >
+                          style={{ fontFamily: 'Inter, sans-serif' }} />
+                        <button type="button" onClick={() => setShowPassword(!showPassword)}
+                          className="absolute inset-y-0 right-3.5 flex items-center text-[#44474e]/40 hover:text-[#44474e] transition-colors">
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[0.65rem] font-semibold tracking-widest text-[#44474e] uppercase" style={{ fontFamily: 'Manrope, sans-serif' }}>
+                        Confirm Password
+                      </label>
+                      <div className="relative">
+                        <input type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={form.confirmPassword} onChange={set('confirmPassword')}
+                          className="w-full px-4 pr-11 py-2.5 rounded-xl bg-white text-[#1a1c1e] placeholder:text-[#44474e]/30 text-sm outline-none focus:ring-2 focus:ring-[#115cb9]/25 transition-all shadow-[0_1px_4px_rgba(0,30,64,0.06)]"
+                          style={{ fontFamily: 'Inter, sans-serif' }} />
+                        <button type="button" onClick={() => setShowPassword(!showPassword)}
+                          className="absolute inset-y-0 right-3.5 flex items-center text-[#44474e]/40 hover:text-[#44474e] transition-colors">
                           {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
                       </div>
