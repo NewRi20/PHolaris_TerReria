@@ -1,4 +1,3 @@
-# Part mo anthon, ikaw bahala if buburahin mo to, pinageneate ko lang to e, may tinest lang ako
 from __future__ import annotations
 
 import uuid
@@ -11,6 +10,47 @@ from app.models.email_log import EmailLog
 from app.models.event import Event
 from app.models.teacher_profile import TeacherProfile
 from app.models.user import User
+
+
+# Region code to full name mapping
+REGION_MAPPING = {
+    "R1": "Region I (Ilocos Region)",
+    "R2": "Region II (Cagayan Valley)",
+    "R3": "Region III (Central Luzon)",
+    "R4": "Region IV-A (CALABARZON)",
+    "R5": "Region V (Bicol Region)",
+    "R6": "Region VI (Western Visayas)",
+    "R7": "Region VII (Central Visayas)",
+    "R8": "Region VIII (Eastern Visayas)",
+    "R9": "Region IX (Zamboanga Peninsula)",
+    "R10": "Region X (Northern Mindanao)",
+    "R11": "Region XI (Davao Region)",
+    "R12": "Region XII (SOCCSKSARGEN)",
+    "NCR": "National Capital Region",
+}
+
+
+def _region_matches(profile_region: str, event_regions: list[str]) -> bool:
+    """Check if teacher's region matches any event target region."""
+    if not event_regions:
+        return True
+    
+    # Check for exact match
+    if profile_region in event_regions:
+        return True
+    
+    # Check if profile_region code maps to any event region
+    full_name = REGION_MAPPING.get(profile_region)
+    if full_name and full_name in event_regions:
+        return True
+    
+    # Check if any event region maps to profile_region code
+    for event_region in event_regions:
+        for code, name in REGION_MAPPING.items():
+            if name == event_region and code == profile_region:
+                return True
+    
+    return False
 
 
 async def send_event_invitations(db: AsyncSession, event: Event) -> int:
@@ -47,16 +87,38 @@ async def _get_target_teachers(db: AsyncSession, event: Event) -> list[tuple[Use
 def _matches_event(event: Event, profile: TeacherProfile) -> bool:
     criteria = event.target_audience_criteria or {}
 
-    if event.target_regions and profile.region not in event.target_regions:
+    # Check region with mapping support (handle NULL target_regions)
+    # Convert dict/list to list format
+    target_regions = event.target_regions or []
+    if isinstance(target_regions, dict):
+        target_regions = list(target_regions.values()) if target_regions.values() else []
+    elif not isinstance(target_regions, list):
+        target_regions = []
+    
+    if target_regions and not _region_matches(profile.region, target_regions):
         return False
-    if event.target_provinces and profile.province not in event.target_provinces:
+    
+    # Check provinces (handle NULL target_provinces)
+    target_provinces = event.target_provinces or []
+    if isinstance(target_provinces, dict):
+        target_provinces = list(target_provinces.values()) if target_provinces.values() else []
+    elif not isinstance(target_provinces, list):
+        target_provinces = []
+    
+    if target_provinces and profile.province not in target_provinces:
         return False
-    if event.target_subject and profile.current_subject not in {event.target_subject, profile.current_subject}:
-        return False
+    
+    # Check subject (Cross-Curricular matches any subject)
+    target_subject = event.target_subject
+    if target_subject and target_subject != "Cross-Curricular":
+        if profile.current_subject != target_subject and profile.specialization != target_subject:
+            return False
 
+    # Check criteria subjects (Any subject matches any teacher)
     subjects = criteria.get("subjects")
-    if subjects and profile.current_subject not in subjects and profile.specialization not in subjects:
-        return False
+    if subjects and "Any subject" not in subjects:
+        if profile.current_subject not in subjects and profile.specialization not in subjects:
+            return False
 
     max_years_experience = criteria.get("max_years_experience")
     if max_years_experience is not None and profile.years_experience is not None and profile.years_experience > max_years_experience:
