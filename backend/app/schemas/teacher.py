@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from typing import Optional
+from uuid import UUID
 from pydantic import BaseModel
 
 
@@ -22,8 +23,8 @@ class TeacherProfileUpdate(BaseModel):
 
 
 class TeacherProfileResponse(BaseModel):
-    id: str
-    user_id: str
+    id: UUID | str
+    user_id: UUID | str
     teacher_id_number: Optional[str] = None
     school: Optional[str] = None
     region: Optional[str] = None
@@ -56,8 +57,8 @@ class TrainingCreate(BaseModel):
 
 
 class TrainingResponse(BaseModel):
-    id: str
-    teacher_id: str
+    id: UUID | str
+    teacher_id: UUID | str
     training_name: str
     training_type: Optional[str] = None
     subject_area: Optional[str] = None
@@ -73,11 +74,11 @@ class TrainingResponse(BaseModel):
 # --- Badge ---
 
 class BadgeResponse(BaseModel):
-    id: str
+    id: UUID | str
     badge_name: str
     description: Optional[str] = None
-    event_id: Optional[str] = None
-    training_id: Optional[str] = None
+    event_id: Optional[UUID | str] = None
+    training_id: Optional[UUID | str] = None
     awarded_at: datetime
 
     model_config = {"from_attributes": True}
