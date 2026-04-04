@@ -148,7 +148,7 @@ export default function OnboardingLayout() {
         <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <p className="text-xs text-[#44474e]/50" style={{ fontFamily: 'Inter, sans-serif' }}>
             <span className="font-semibold text-[#001e40]" style={{ fontFamily: 'Manrope, sans-serif' }}>PHolaris</span>
-            {' '}· © 2026 DOST STAR. Science Teacher Academy for the Regions.
+            {' '}· © 2026 PHolaris · DOST-SEI STAR Program. All rights reserved.
           </p>
           <nav className="flex items-center gap-4">
             {['Program Overview', 'Privacy Policy', 'Technical Support'].map((item) => (

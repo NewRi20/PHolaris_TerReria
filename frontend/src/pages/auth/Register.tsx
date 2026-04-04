@@ -110,8 +110,24 @@ export default function Register() {
           </div>
         </div>
 
+        
+
         {/* RIGHT — Scrollable form panel */}
         <div className="flex-1 bg-[#f9f9fd] overflow-y-auto">
+          
+          <div className="px-8 sm:px-16 lg:px-20 pt-8">
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 text-xs text-[#44474e]/60 hover:text-[#001e40] transition-colors"
+            style={{ fontFamily: 'Inter, sans-serif' }}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 14 14">
+              <path d="M11 7H3M6 4L3 7l3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Back to Landing Page
+          </Link>
+        </div>
+
           <div className="px-8 sm:px-16 lg:px-20 py-12">
             <div className="max-w-md w-full mx-auto lg:mx-0">
 
@@ -143,7 +159,7 @@ export default function Register() {
                     </h3>
                   </div>
 
-                  <div className="space-y-3 pl-9">
+                  <div className="space-y-3 pl-0">
                     <div className="space-y-1.5">
                       <label
                         className="text-[0.65rem] font-semibold tracking-widest text-[#44474e] uppercase"
@@ -194,7 +210,7 @@ export default function Register() {
                     </h3>
                   </div>
 
-                  <div className="space-y-3 pl-9">
+                  <div className="space-y-3 pl-0">
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                         <label
@@ -270,7 +286,7 @@ export default function Register() {
                     </h3>
                   </div>
 
-                  <div className="space-y-3 pl-9">
+                  <div className="space-y-3 pl-0">
                     <div className="space-y-1.5">
                       <label
                         className="text-[0.65rem] font-semibold tracking-widest text-[#44474e] uppercase"
@@ -330,14 +346,6 @@ export default function Register() {
       {/* Footer */}
       <footer className="bg-white border-t border-[#44474e]/8">
         <div className="max-w-7xl mx-auto px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-bold text-[#001e40]" style={{ fontFamily: 'Manrope, sans-serif' }}>
-              PHolaris
-            </p>
-            <p className="text-xs text-[#44474e]/50 mt-0.5" style={{ fontFamily: 'Inter, sans-serif' }}>
-              Precision in Science, Excellence in Service. Empowering educators since 2026.
-            </p>
-          </div>
           <nav className="flex items-center gap-5">
             {['Privacy Policy', 'Terms of Service', 'DOST Main', 'Data Privacy'].map((item) => (
               <Link
@@ -351,7 +359,7 @@ export default function Register() {
             ))}
           </nav>
           <p className="text-xs text-[#44474e]/40" style={{ fontFamily: 'Inter, sans-serif' }}>
-            © 2026 DOST STAR Program. All rights reserved.
+            © 2026 PHolaris · DOST-SEI STAR Program. All rights reserved.
           </p>
         </div>
       </footer>

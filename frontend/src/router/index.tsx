@@ -1,4 +1,5 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom'
+import LandingPage from '@/pages/landing/LandingPage'
 import Login from '@/pages/auth/Login'
 import Register from '@/pages/auth/Register'
 import OnboardingLayout from '@/pages/onboarding/OnboardingLayout'
@@ -8,7 +9,7 @@ import Step3 from '@/pages/onboarding/Step3'
 import Step4 from '@/pages/onboarding/Step4'
 
 const router = createBrowserRouter([
-  { path: '/', element: <div>Landing Page - Coming Soon</div> },
+  { path: '/', element: <LandingPage /> },
   { path: '/login', element: <Login /> },
   { path: '/register', element: <Register /> },
   {

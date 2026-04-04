@@ -22,6 +22,19 @@ export default function Login() {
         }}
       />
 
+      <div className="relative z-10 px-6 pt-5">
+      <Link
+        to="/"
+        className="inline-flex items-center gap-1.5 text-xs text-[#44474e]/60 hover:text-[#001e40] transition-colors"
+        style={{ fontFamily: 'Inter, sans-serif' }}
+      >
+        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 14 14">
+          <path d="M11 7H3M6 4L3 7l3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        Back to Landing Page
+      </Link>
+    </div>
+
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-16 relative z-10">
         <div className="flex flex-col items-center mb-8 gap-3">
           <div className="flex items-center gap-2.5">
@@ -123,12 +136,17 @@ export default function Login() {
                   className="w-full py-3.5 rounded-xl font-semibold text-white text-sm tracking-wide transition-all bg-gradient-to-r from-[#001e40] to-[#1a3a5c] hover:from-[#001830] hover:to-[#152f4a] hover:shadow-[0_4px_20px_rgba(0,30,64,0.3)] active:scale-[0.99] flex items-center justify-center gap-2"
                   style={{ fontFamily: 'Manrope, sans-serif' }}
                 >
-                  Sign In to Portal
+                  Login
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 16 16">
                     <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </button>
-
+                  <p className="text-center text-sm text-[#44474e]" style={{ fontFamily: 'Inter, sans-serif' }}>
+                     Don't have an account?{' '}
+                    <Link to="/register" className="text-[#115cb9] font-semibold hover:text-[#001e40] transition-colors">
+                      Create one
+                    </Link>
+                  </p>
               </form>
             </div>
           </div>
@@ -142,7 +160,7 @@ export default function Login() {
               PHolaris
             </p>
             <p className="text-xs text-[#44474e]/70 mt-0.5">
-              © 2026 DOST STAR Program. All rights reserved. Precision in Pedagogy.
+              © 2026 PHolaris · DOST-SEI STAR Program. All rights reserved.
             </p>
           </div>
           <nav className="flex items-center gap-5">
