@@ -1,45 +1,41 @@
-import AdminMap from "./components/ui/AdminMap";
-import TeacherMap from "./components/ui/TeacherMap";
+import { useState } from 'react';
+
+// FIX: Corrected import paths based on your actual folder structure
+import AdminLayout from './layouts/AdminLayout';
+import TeacherLayout from './layouts/TeacherLayout';
+
+import AdminDashboard from "./components/AdminDashboard";
+import UnderservedAreas from "./components/UnderservedAreas";
+import EventsManagement from "./components/EventsManagement";
+import TeacherDirectory from "./components/TeacherDirectory";
+import TeacherDashboard from "./components/TeacherDashboard";
 
 function App() {
+  const [currentView, setCurrentView] = useState('admin-dashboard');
+
+  const renderAdminView = () => {
+    switch (currentView) {
+      case 'admin-dashboard': return <AdminDashboard />;
+      case 'underserved-areas': return <UnderservedAreas />;
+      case 'events-management': return <EventsManagement />;
+      case 'teacher-directory': return <TeacherDirectory />;
+      default: return <AdminDashboard />;
+    }
+  };
+
+  if (currentView === 'teacher-portal') {
+    return (
+      <TeacherLayout currentView={currentView} setCurrentView={setCurrentView}>
+        <TeacherDashboard />
+      </TeacherLayout>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-slate-50 py-8 px-4">
-      
-      {/* Centered container that limits the width */}
-      <div className="max-w-5xl mx-auto">
-        
-        {/* Main Page Header */}
-        <div className="mb-8 border-b border-slate-200 pb-4">
-          <h1 className="text-3xl font-bold text-slate-900">PHOLARIS</h1>
-          <p className="text-slate-500 mt-1">Interactive Regional Underserved Area Map</p>
-        </div>
-
-        {/* Admin Map Container */}
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
-          {/* NEW: Admin Map Header */}
-          <div className="mb-4 px-2">
-            <h2 className="text-xl font-bold text-slate-800">Admin View</h2>
-            <p className="text-sm text-slate-500">Regional Risk Metrics and Capacity Needs</p>
-          </div>
-          
-          <AdminMap />
-        </div>
-
-        {/* Teacher Map Container */}
-        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 mt-8">
-          {/* NEW: Teacher Map Header */}
-          <div className="mb-4 px-2">
-            <h2 className="text-xl font-bold text-slate-800">Teacher View</h2>
-            <p className="text-sm text-slate-500">Upcoming Events and Training Opportunities</p>
-          </div>
-          
-          <TeacherMap />
-        </div>
-
-      </div>
-      
-    </div>
-  )
+    <AdminLayout currentView={currentView} setCurrentView={setCurrentView}>
+      {renderAdminView()}
+    </AdminLayout>
+  );
 }
 
-export default App
+export default App;

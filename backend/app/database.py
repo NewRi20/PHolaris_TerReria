@@ -18,7 +18,7 @@ ssl_context = ssl_module.create_default_context()
 engine = create_async_engine(
     _clean_database_url(settings.DATABASE_URL),
     echo=False,
-    connect_args={"ssl": ssl_context},
+    #connect_args={"ssl": ssl_context},
 )
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 

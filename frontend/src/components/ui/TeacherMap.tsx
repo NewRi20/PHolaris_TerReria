@@ -1,4 +1,3 @@
-import React from 'react';
 import { MapContainer, TileLayer, GeoJSON } from 'react-leaflet';
 import phRegionsData from "../../assets/regions.json"; 
 
