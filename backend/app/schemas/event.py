@@ -157,8 +157,3 @@ class EventRSVPResponse(BaseModel):
     interested: bool
     attended: bool
     created_at: datetime
-    interested: bool
-    attended: bool
-    created_at: datetime
-
-    model_config = {"from_attributes": True}
