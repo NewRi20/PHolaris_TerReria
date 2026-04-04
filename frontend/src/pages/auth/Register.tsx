@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import { Eye, EyeOff, FlaskConical } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { useAuth } from '@/hooks/useAuth'
 
 export default function Register() {
+  const { register } = useAuth()
+  const navigate = useNavigate()
   const [showPassword, setShowPassword] = useState(false)
   const [form, setForm] = useState({
   fullName: '',
@@ -10,14 +13,42 @@ export default function Register() {
   password: '',
   confirmPassword: '',
 })
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const set = (field: keyof typeof form) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
       setForm({ ...form, [field]: e.target.value })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log('Register submitted', form)
+    setErrorMessage(null)
+
+    if (!form.fullName || !form.email || !form.password || !form.confirmPassword) {
+      setErrorMessage('Please complete all required fields.')
+      return
+    }
+
+    if (form.password !== form.confirmPassword) {
+      setErrorMessage('Passwords do not match.')
+      return
+    }
+
+    setIsSubmitting(true)
+
+    try {
+      await register({
+        email: form.email,
+        password: form.password,
+        full_name: form.fullName,
+      })
+
+      navigate('/app', { replace: true })
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Registration failed. Please try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -220,14 +251,20 @@ export default function Register() {
                 {/* Submit */}
                 <button
                   type="submit"
-                  className="w-full py-3.5 rounded-xl font-semibold text-white text-sm tracking-wide transition-all bg-gradient-to-r from-[#001e40] to-[#1a3a5c] hover:from-[#001830] hover:to-[#152f4a] hover:shadow-[0_4px_20px_rgba(0,30,64,0.25)] active:scale-[0.99] flex items-center justify-center gap-2"
+                  disabled={isSubmitting}
+                  className="w-full py-3.5 rounded-xl font-semibold text-black text-sm tracking-wide transition-all bg-gradient-to-r from-[#001e40] to-[#1a3a5c] hover:from-[#001830] hover:to-[#152f4a] hover:shadow-[0_4px_20px_rgba(0,30,64,0.25)] active:scale-[0.99] flex items-center justify-center gap-2"
                   style={{ fontFamily: 'Manrope, sans-serif' }}
                 >
-                  Create Account
+                  {isSubmitting ? 'Creating Account...' : 'Create Account'}
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 16 16">
                     <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </button>
+                {errorMessage ? (
+                  <p className="text-sm text-red-600 text-center" style={{ fontFamily: 'Inter, sans-serif' }}>
+                    {errorMessage}
+                  </p>
+                ) : null}
 
                 <p className="text-center text-sm text-[#44474e]" style={{ fontFamily: 'Inter, sans-serif' }}>
                   Already have an account?{' '}

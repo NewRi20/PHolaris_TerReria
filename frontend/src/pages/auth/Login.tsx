@@ -1,15 +1,45 @@
 import { useState } from 'react'
 import { Eye, EyeOff, FlaskConical, User, Lock } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useAuth } from '@/hooks/useAuth'
 
 export default function Login() {
+  const { login } = useAuth()
+  const navigate = useNavigate()
+  const location = useLocation()
   const [showPassword, setShowPassword] = useState(false)
   const [keepAuth, setKeepAuth] = useState(false)
   const [credentials, setCredentials] = useState({ id: '', password: '' })
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log('Login submitted', credentials)
+    setErrorMessage(null)
+
+    if (!credentials.id || !credentials.password) {
+      setErrorMessage('Please enter both your ID/Email and password.')
+      return
+    }
+
+    setIsSubmitting(true)
+
+    try {
+      await login({
+        identifier: credentials.id,
+        password: credentials.password,
+      })
+
+      const state = location.state as { from?: string } | null
+      const redirectTarget = state?.from
+      const defaultTarget = '/app'
+
+      navigate(redirectTarget || defaultTarget, { replace: true })
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Login failed. Please try again.')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -133,14 +163,20 @@ export default function Login() {
 
                 <button
                   type="submit"
-                  className="w-full py-3.5 rounded-xl font-semibold text-white text-sm tracking-wide transition-all bg-gradient-to-r from-[#001e40] to-[#1a3a5c] hover:from-[#001830] hover:to-[#152f4a] hover:shadow-[0_4px_20px_rgba(0,30,64,0.3)] active:scale-[0.99] flex items-center justify-center gap-2"
+                  disabled={isSubmitting}
+                  className="w-full py-3.5 rounded-xl font-semibold text-black text-sm tracking-wide transition-all bg-gradient-to-r from-[#001e40] to-[#1a3a5c] hover:from-[#001830] hover:to-[#152f4a] hover:shadow-[0_4px_20px_rgba(0,30,64,0.3)] active:scale-[0.99] flex items-center justify-center gap-2"
                   style={{ fontFamily: 'Manrope, sans-serif' }}
                 >
-                  Login
+                  {isSubmitting ? 'Logging in...' : 'Login'}
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 16 16">
                     <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </button>
+                {errorMessage ? (
+                  <p className="text-sm text-red-600 text-center" style={{ fontFamily: 'Inter, sans-serif' }}>
+                    {errorMessage}
+                  </p>
+                ) : null}
                   <p className="text-center text-sm text-[#44474e]" style={{ fontFamily: 'Inter, sans-serif' }}>
                      Don't have an account?{' '}
                     <Link to="/register" className="text-[#115cb9] font-semibold hover:text-[#001e40] transition-colors">
