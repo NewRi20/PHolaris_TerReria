@@ -72,14 +72,18 @@ async def add_training(
     db.add(training)
     await db.flush()
 
-    # auto-award completion badge
-    badge = Badge(
-        teacher_id=profile.id,
-        training_id=training.id,
-        badge_name=f"Completed: {training.training_name}",
-        description=f"Completed training on {training.date_attended or 'unknown date'}",
+    # auto-award completion badge (idempotent — skip if already awarded for this training)
+    existing_badge = await db.execute(
+        select(Badge).where(Badge.teacher_id == profile.id, Badge.training_id == training.id)
     )
-    db.add(badge)
+    if not existing_badge.scalar_one_or_none():
+        badge = Badge(
+            teacher_id=profile.id,
+            training_id=training.id,
+            badge_name=f"Completed: {training.training_name}",
+            description=f"Completed training on {training.date_attended or 'unknown date'}",
+        )
+        db.add(badge)
 
     # update last_training_date if this is the most recent
     if training.date_attended and (not profile.last_training_date or training.date_attended > profile.last_training_date):
@@ -130,6 +134,9 @@ async def list_teachers(
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
+    skip = max(skip, 0)
+    limit = max(min(limit, 100), 1)
+
     query = select(TeacherProfile)
     if region:
         query = query.where(TeacherProfile.region == region)
