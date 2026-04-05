@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { FlaskConical, ArrowRight, CheckCircle2, BarChart3, TrendingUp, Users, GraduationCap, ChevronRight } from 'lucide-react'
+import { ArrowRight, CheckCircle2, BarChart3, TrendingUp, Users, GraduationCap, ChevronRight } from 'lucide-react'
 
 export default function LandingPage() {
   return (
@@ -10,9 +10,7 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-[#001e40] flex items-center justify-center">
-              <FlaskConical className="w-3.5 h-3.5 text-white" />
-            </div>
+            <img src="/src/assets/logo.png" alt="PHolaris Logo" className="w-10 h-10 object-contain" />
             <span className="font-bold text-[#001e40] tracking-tight" style={{ fontFamily: 'Manrope, sans-serif' }}>
               PHOLARIS
             </span>
@@ -108,8 +106,9 @@ export default function LandingPage() {
               maxWidth: '600px',
             }}
           >
-            Empowering Science &{' '}
-            <span style={{ color: '#4d8ef0' }}>Math Educators</span>
+            Empowering {' '}
+            <span style={{ color: '#4d8ef0' }}>STEM Educators </span>
+            Across the Philippines
           </h1>
 
           {/* Description */}
@@ -133,13 +132,6 @@ export default function LandingPage() {
               Portal Access
               <ArrowRight className="w-4 h-4" />
             </Link>
-            <a
-              href="#mission"
-              className="flex items-center gap-2 px-6 py-3 rounded-xl border border-white/20 text-white text-sm font-medium hover:bg-white/10 transition-all"
-              style={{ fontFamily: 'Manrope, sans-serif' }}
-            >
-              View Mission
-            </a>
           </div>
         </div>
       </section>
@@ -385,9 +377,7 @@ export default function LandingPage() {
           {/* Brand */}
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <div className="w-6 h-6 rounded-md bg-[#001e40] flex items-center justify-center">
-                <FlaskConical className="w-3 h-3 text-white" />
-              </div>
+              <img src="/src/assets/logo.png" alt="PHolaris Logo" className="w-10 h-10 object-contain" />
               <span className="font-bold text-[#001e40] text-sm" style={{ fontFamily: 'Manrope, sans-serif' }}>
                 PHOLARIS
               </span>

@@ -68,9 +68,7 @@ export default function Login() {
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-16 relative z-10">
         <div className="flex flex-col items-center mb-8 gap-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-[#001e40] flex items-center justify-center shadow-[0_4px_24px_rgba(0,30,64,0.18)]">
-              <FlaskConical className="w-5 h-5 text-white" />
-            </div>
+            <img src="/src/assets/logo.png" alt="PHolaris Logo" className="w-10 h-10 object-contain" />
             <span className="text-2xl font-bold tracking-tight text-[#001e40]" style={{ fontFamily: 'Manrope, sans-serif' }}>
               PHolaris
             </span>
@@ -157,7 +155,7 @@ export default function Login() {
                     )}
                   </button>
                   <span className="text-sm text-[#44474e]" style={{ fontFamily: 'Inter, sans-serif' }}>
-                    Keep me authenticated
+                    Keep me logged in
                   </span>
                 </div>
 
