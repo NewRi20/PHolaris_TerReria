@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 
 interface TeacherLayoutProps {
@@ -8,32 +8,66 @@ interface TeacherLayoutProps {
 }
 
 export default function TeacherLayout({ children, currentView, setCurrentView }: TeacherLayoutProps) {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showNotifs, setShowNotifs] = useState(false);
+
   return (
-    <div className="bg-surface text-on-surface overflow-hidden h-screen flex">
-      <aside className="flex flex-col h-screen w-64 bg-slate-100 p-4 gap-2 border-r-0 fixed left-0 top-0 overflow-y-auto z-50">
-        <div className="mb-8 px-2">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center text-white">
-              <span className="material-symbols-outlined">school</span>
-            </div>
-            <div>
-              <h2 className="text-lg font-black text-sky-950 uppercase tracking-widest leading-none">Teacher Portal</h2>
-              <p className="text-xs text-slate-500 font-medium tracking-tight">Professional Growth</p>
-            </div>
+    <div className="flex h-screen overflow-hidden bg-surface font-body text-on-surface">
+      
+      {/* Collapsible SideNavBar (Matched to Admin style) */}
+      <aside className="group w-[4.5rem] hover:w-72 fixed left-0 top-0 bottom-0 flex flex-col bg-slate-50 border-r border-slate-200 transition-all duration-300 ease-in-out z-50 overflow-hidden">
+        <div className="px-4 py-6 mb-4 flex items-center gap-3 w-72">
+          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shrink-0">
+            <span className="material-symbols-outlined text-white">school</span>
+          </div>
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <h1 className="text-lg font-extrabold text-blue-900 font-headline leading-tight whitespace-nowrap">Teacher Portal</h1>
+            <p className="text-[10px] uppercase tracking-widest text-slate-500 font-bold mt-0.5">Professional Growth</p>
           </div>
         </div>
-        
-        <nav className="flex-1 space-y-1">
-          <button onClick={() => setCurrentView('teacher-portal')} className="w-full flex items-center gap-3 px-4 py-3 bg-white text-secondary font-bold rounded-xl shadow-sm transition-all duration-300 ease-in-out font-manrope text-sm">
-            <span className="material-symbols-outlined">map</span>
-            <span>Regional Events</span>
+
+        <nav className="flex-1 space-y-1 w-72">
+          <button 
+            onClick={() => setCurrentView('teacher-portal')}
+            className={`w-full flex items-center gap-4 px-[1.125rem] py-3 transition-all duration-200 ease-in-out ${
+              currentView === 'teacher-portal' 
+                ? 'bg-blue-50 text-blue-900 font-bold border-r-4 border-blue-900' 
+                : 'text-slate-600 hover:text-blue-800 hover:bg-white'
+            }`}
+          >
+            <span className="material-symbols-outlined shrink-0">map</span>
+            <span className="opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity duration-200 text-sm">
+              Regional Events
+            </span>
           </button>
-          <button onClick={() => setCurrentView('admin-dashboard')} className="w-full flex items-center gap-3 px-4 py-3 text-slate-600 hover:text-secondary hover:bg-slate-200/50 transition-all duration-300 ease-in-out font-manrope text-sm font-medium">
-            <span className="material-symbols-outlined">swap_horiz</span>
-            <span>Switch to Admin</span>
+          
+          <button 
+            onClick={() => setCurrentView('teacher-profile')}
+            className={`w-full flex items-center gap-4 px-[1.125rem] py-3 transition-all duration-200 ease-in-out ${
+              currentView === 'teacher-profile' 
+                ? 'bg-blue-50 text-blue-900 font-bold border-r-4 border-blue-900' 
+                : 'text-slate-600 hover:text-blue-800 hover:bg-white'
+            }`}
+          >
+            <span className="material-symbols-outlined shrink-0">person</span>
+            <span className="opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity duration-200 text-sm">
+              My Profile
+            </span>
           </button>
         </nav>
+
+        <div className="pt-4 px-3 space-y-1 border-t border-slate-200 mt-auto w-72">
+          <button className="w-full flex items-center gap-4 px-3 py-2 text-slate-600 hover:text-blue-800 hover:bg-white transition-all rounded-lg">
+            <span className="material-symbols-outlined text-[20px] shrink-0">settings</span>
+            <span className="opacity-0 group-hover:opacity-100 text-sm whitespace-nowrap transition-opacity duration-200">Settings</span>
+          </button>
+          
+          <button onClick={logout} className="w-full flex items-center gap-4 px-3 py-2 text-slate-600 hover:text-error hover:bg-red-50 transition-all rounded-lg mb-2">
+            <span className="material-symbols-outlined text-[20px] shrink-0">logout</span>
+            <span className="opacity-0 group-hover:opacity-100 text-sm font-bold whitespace-nowrap transition-opacity duration-200">Logout</span>
+          </button>
+        </div>
       </aside>
 
       <main className="ml-64 flex-1 bg-surface flex flex-col h-screen">
@@ -41,14 +75,16 @@ export default function TeacherLayout({ children, currentView, setCurrentView }:
           <span className="text-xl font-bold tracking-tighter text-sky-950 font-manrope">DOST STAR</span>
           <div className="flex items-center gap-3 pl-2">
             <div className="text-right">
-              <p className="text-xs font-bold text-sky-950 leading-none">{user?.full_name}</p>
+              <p className="text-xs font-bold text-sky-950 leading-none">Prof. Maria Clara</p>
               <p className="text-[10px] text-slate-500 uppercase tracking-wider">Region VII Administrator</p>
             </div>
-            <img alt="Portrait" className="w-10 h-10 rounded-full border-2 border-white shadow-sm" src="https://ui-avatars.com/api/?name=Maria+Clara&background=115cb9&color=fff"/>
+
           </div>
         </header>
 
+        {/* Page Content Injected Here */}
         {children}
+
       </main>
     </div>
   );

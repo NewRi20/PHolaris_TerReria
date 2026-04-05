@@ -220,3 +220,55 @@ h1, h2, h3, h4, h5, h6, .font-headline {
   margin-left: 4.5rem;
   width: calc(100% - 4.5rem);
 }
+
+/* --- Protect Leaflet Maps from Tailwind's Image Reset --- */
+.leaflet-container img {
+  max-width: none !important;
+  max-height: none !important;
+}
+
+/* --- Force Map to Fill its Parent Container --- */
+.leaflet-container {
+  height: 100% !important;
+  width: 100% !important;
+  border-radius: inherit; /* Keeps the corners rounded! */
+}
+
+/* --- Fix Ghost Text in Popups --- */
+.leaflet-popup-content-wrapper {
+  background-color: #ffffff !important;
+  color: #191c1e !important; /* Forces text to be dark grey */
+}
+
+.leaflet-popup-content * {
+  color: #191c1e !important; /* Ensures headers and spans inside also stay dark */
+}
+
+/* --- AdminMap Dark Tooltip Styling --- */
+.leaflet-tooltip.dark-tooltip {
+  background-color: #0f172a !important; /* Tailwind slate-900 */
+  border: 1px solid #334155 !important; /* Tailwind slate-700 */
+  border-radius: 12px !important;
+  padding: 14px 16px !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5) !important;
+  white-space: normal !important;
+}
+
+/* Fix the tooltip arrow (triangle) so it matches the dark background */
+.leaflet-tooltip-top.dark-tooltip::before {
+  border-top-color: #334155 !important; 
+}
+.leaflet-tooltip-bottom.dark-tooltip::before {
+  border-bottom-color: #334155 !important;
+}
+.leaflet-tooltip-left.dark-tooltip::before {
+  border-left-color: #334155 !important;
+}
+.leaflet-tooltip-right.dark-tooltip::before {
+  border-right-color: #334155 !important;
+}
+
+/* Ensure the text inside overrides any weird Leaflet defaults */
+.leaflet-tooltip.dark-tooltip * {
+  text-shadow: none !important;
+}
