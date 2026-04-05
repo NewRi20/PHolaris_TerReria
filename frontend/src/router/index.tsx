@@ -14,7 +14,7 @@ import TeacherDirectory from '@/components/TeacherDirectory'
 import TeacherDashboard from '@/components/TeacherDashboard'
 import AdminPortalLayout from '@/pages/admin/AdminPortalLayout'
 import TeacherPortalLayout from '@/pages/teacher/TeacherPortalLayout'
-import { ProtectedRoute, PublicOnlyRoute, RoleProtectedRoute } from './guards'
+import { AppHomeRedirect, ProtectedRoute, PublicOnlyRoute, RoleProtectedRoute } from './guards'
 
 const router = createBrowserRouter([
   { path: '/', element: <LandingPage /> },
@@ -41,7 +41,7 @@ const router = createBrowserRouter([
       },
       {
         path: '/app',
-        element: <Navigate to="/app/admin/dashboard" replace />,
+        element: <AppHomeRedirect />,
       },
       {
         path: '/app/admin',

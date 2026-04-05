@@ -38,6 +38,20 @@ export function ProtectedRoute() {
   return <Outlet />;
 }
 
+export function AppHomeRedirect() {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <FullScreenLoader />;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <Navigate to={getDefaultAppPath(user.role)} replace />;
+}
+
 interface RoleProtectedRouteProps {
   allowedRoles: AuthRole[];
 }
