@@ -1,4 +1,5 @@
 import React from 'react';
+import { useAuth } from '../hooks/useAuth';
 
 interface TeacherLayoutProps {
   children: React.ReactNode;
@@ -7,6 +8,7 @@ interface TeacherLayoutProps {
 }
 
 export default function TeacherLayout({ children, currentView, setCurrentView }: TeacherLayoutProps) {
+  const { user } = useAuth();
   return (
     <div className="bg-surface text-on-surface overflow-hidden h-screen flex">
       <aside className="flex flex-col h-screen w-64 bg-slate-100 p-4 gap-2 border-r-0 fixed left-0 top-0 overflow-y-auto z-50">
@@ -39,7 +41,7 @@ export default function TeacherLayout({ children, currentView, setCurrentView }:
           <span className="text-xl font-bold tracking-tighter text-sky-950 font-manrope">DOST STAR</span>
           <div className="flex items-center gap-3 pl-2">
             <div className="text-right">
-              <p className="text-xs font-bold text-sky-950 leading-none">Prof. Maria Clara</p>
+              <p className="text-xs font-bold text-sky-950 leading-none">{user?.full_name}</p>
               <p className="text-[10px] text-slate-500 uppercase tracking-wider">Region VII Administrator</p>
             </div>
             <img alt="Portrait" className="w-10 h-10 rounded-full border-2 border-white shadow-sm" src="https://ui-avatars.com/api/?name=Maria+Clara&background=115cb9&color=fff"/>
