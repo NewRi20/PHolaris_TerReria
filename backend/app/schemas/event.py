@@ -1,7 +1,8 @@
 from datetime import date, datetime
-from typing import Optional
+from typing import Optional, Union
+from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class EventCreate(BaseModel):
@@ -67,7 +68,9 @@ class EventUpdate(BaseModel):
 
 
 class EventResponse(BaseModel):
-    id: str
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: Union[UUID, str]
     title: str
     slug: str
     description: Optional[str] = None
@@ -96,12 +99,10 @@ class EventResponse(BaseModel):
     event_date: Optional[datetime] = None
     location: Optional[str] = None
     rsvp_deadline: Optional[datetime] = None
-    created_by: Optional[str] = None
+    created_by: Optional[Union[UUID, str]] = None
     created_at: datetime
     updated_at: datetime
     voided_at: Optional[datetime] = None
-
-    model_config = {"from_attributes": True}
 
 
 class AIEventRecommendation(BaseModel):
@@ -134,13 +135,13 @@ class EventVoteCreate(BaseModel):
 
 
 class EventVoteResponse(BaseModel):
-    id: str
-    event_id: str
-    user_id: str
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: Union[UUID, str]
+    event_id: Union[UUID, str]
+    user_id: Union[UUID, str]
     vote: str
     created_at: datetime
-
-    model_config = {"from_attributes": True}
 
 
 class EventRSVPCreate(BaseModel):
@@ -148,9 +149,14 @@ class EventRSVPCreate(BaseModel):
 
 
 class EventRSVPResponse(BaseModel):
-    id: str
-    event_id: str
-    teacher_id: str
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: Union[UUID, str]
+    event_id: Union[UUID, str]
+    teacher_id: Union[UUID, str]
+    interested: bool
+    attended: bool
+    created_at: datetime
     interested: bool
     attended: bool
     created_at: datetime
