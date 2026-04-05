@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+import logging
 from uuid import UUID
 from datetime import datetime, date
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.dependencies import require_admin
+from app.core.exceptions import StarException
+from app.core.rate_limiter import RATE_LIMITS, limiter
 from app.database import get_db
 from app.models.user import User
 from app.models.event import Event
@@ -25,6 +28,7 @@ from app.services.email_service import _get_target_teachers
 
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
+logger = logging.getLogger("app.router.ai")
 
 # In-memory cache for last generated recommendations
 _last_recommendations: dict[str, Any] = {
@@ -43,7 +47,9 @@ class ApproveEventsRequest(BaseModel):
 
 
 @router.post("/generate-events")
+@limiter.limit(RATE_LIMITS["AI_GENERATE"])
 async def generate_events(
+    request: Request,
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
@@ -79,7 +85,7 @@ async def generate_events(
         ]
         
         # Generate event recommendations
-        recommendations = generate_event_recommendations(
+        recommendations = await generate_event_recommendations(
             snapshot=snapshot,
             existing_events=recent_events_dicts,
             limit=5
@@ -98,14 +104,23 @@ async def generate_events(
         }
     
     except ValueError as e:
+        logger.warning(
+            "AI event generation validation failure",
+            extra={"event": {"error": str(e), "route": "generate-events", "admin_id": str(admin.id)}},
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Event generation failed: {str(e)}"
+            detail="Event generation failed due to invalid AI output. Please retry."
         )
-    except Exception as e:
-        raise HTTPException(
+    except Exception:
+        logger.exception(
+            "AI event generation failed",
+            extra={"event": {"route": "generate-events", "admin_id": str(admin.id)}},
+        )
+        raise StarException(
+            error_code="AI_GENERATION_ERROR",
+            message="Event generation failed",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Event generation error: {str(e)}"
         )
 
 
@@ -132,7 +147,9 @@ async def get_recommendations(
 
 
 @router.post("/generate-invitations/{event_id}")
+@limiter.limit("10/minute")
 async def generate_invitations(
+    request: Request,
     event_id: UUID,
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
@@ -186,7 +203,7 @@ async def generate_invitations(
                     "current_subject": profile.current_subject or "your subject area",
                 }
                 
-                draft = draft_invitation_email(event_payload, teacher_payload)
+                draft = await draft_invitation_email(event_payload, teacher_payload)
                 drafts.append({
                     "teacher_id": str(profile.id),
                     "teacher_name": user.full_name,
@@ -210,19 +227,30 @@ async def generate_invitations(
     except HTTPException:
         raise
     except ValueError as e:
+        logger.warning(
+            "AI invitation generation validation failure",
+            extra={"event": {"error": str(e), "route": "generate-invitations", "event_id": str(event_id), "admin_id": str(admin.id)}},
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invitation generation failed: {str(e)}"
+            detail="Invitation generation failed due to invalid AI output. Please retry."
         )
-    except Exception as e:
-        raise HTTPException(
+    except Exception:
+        logger.exception(
+            "AI invitation generation failed",
+            extra={"event": {"route": "generate-invitations", "event_id": str(event_id), "admin_id": str(admin.id)}},
+        )
+        raise StarException(
+            error_code="AI_INVITATION_ERROR",
+            message="Invitation generation failed",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Invitation generation error: {str(e)}"
         )
 
 
 @router.post("/score-pending-sentiments")
+@limiter.limit(RATE_LIMITS["AI_SCORE"])
 async def score_pending_sentiments(
+    request: Request,
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
@@ -242,14 +270,23 @@ async def score_pending_sentiments(
         }
     
     except ValueError as e:
+        logger.warning(
+            "AI sentiment scoring validation failure",
+            extra={"event": {"error": str(e), "route": "score-pending-sentiments", "admin_id": str(admin.id)}},
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Sentiment scoring failed: {str(e)}"
+            detail="Sentiment scoring failed due to invalid AI output. Please retry."
         )
-    except Exception as e:
-        raise HTTPException(
+    except Exception:
+        logger.exception(
+            "AI sentiment scoring failed",
+            extra={"event": {"route": "score-pending-sentiments", "admin_id": str(admin.id)}},
+        )
+        raise StarException(
+            error_code="AI_SENTIMENT_ERROR",
+            message="Sentiment scoring failed",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Sentiment scoring error: {str(e)}"
         )
     
 @router.post("/approve-events")
@@ -259,6 +296,9 @@ async def approve_events(
     db: AsyncSession = Depends(get_db),
 ):
     """Save approved recommendations to database."""
+    if not request.event_slugs:
+        raise HTTPException(status_code=400, detail="event_slugs cannot be empty")
+
     try:
         saved_events = []
         
@@ -267,6 +307,13 @@ async def approve_events(
         
         # Filter to approved slugs
         to_save = [e for e in cached if e.get("slug") in request.event_slugs]
+
+        # Dedup against slugs already in the database to avoid UniqueConstraint crashes
+        candidate_slugs = [e.get("slug") for e in to_save if e.get("slug")]
+        if candidate_slugs:
+            existing_slugs_q = await db.execute(select(Event.slug).where(Event.slug.in_(candidate_slugs)))
+            existing_slugs_in_db = set(existing_slugs_q.scalars().all())
+            to_save = [e for e in to_save if e.get("slug") not in existing_slugs_in_db]
         
         for event_data in to_save:
             # Parse date fields if they're strings
@@ -305,6 +352,7 @@ async def approve_events(
                 ai_rationale=event_data.get("ai_rationale"),
                 ai_analysis_snapshot=event_data.get("ai_analysis_snapshot"),
                 status="draft",
+                created_by=admin.id,
             )
             
             db.add(new_event)
@@ -326,6 +374,20 @@ async def approve_events(
             ],
         }
     
-    except Exception as e:
+    except Exception:
         await db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception(
+            "AI approve events failed",
+            extra={
+                "event": {
+                    "route": "approve-events",
+                    "admin_id": str(admin.id),
+                    "requested_slug_count": len(request.event_slugs),
+                }
+            },
+        )
+        raise StarException(
+            error_code="AI_APPROVE_ERROR",
+            message="Failed to persist approved events",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )

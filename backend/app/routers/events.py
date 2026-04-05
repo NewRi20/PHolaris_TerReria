@@ -1,7 +1,7 @@
 from uuid import UUID
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +11,7 @@ from app.models.event import Event, EventRSVP, EventVote
 from app.models.sentiment import EventSentiment
 from app.models.user import User
 from app.models.teacher_profile import TeacherProfile
+from app.core.rate_limiter import RATE_LIMITS, limiter
 from app.services.email_service import send_event_invitations
 from app.schemas.event import EventCreate, EventResponse, EventRSVPCreate, EventRSVPResponse, EventUpdate, EventVoteCreate, EventVoteResponse
 from app.schemas.sentiment import SentimentCreate, SentimentResponse
@@ -20,17 +21,20 @@ router = APIRouter(prefix="/api/events", tags=["events"])
 
 @router.get("/", response_model=list[EventResponse])
 async def list_events(
-    status: str | None = None,
+    event_status: str | None = None,
     region: str | None = None,
     timeline: str | None = None,
     skip: int = 0,
     limit: int = 50,
     db: AsyncSession = Depends(get_db),
 ):
+    skip = max(skip, 0)
+    limit = max(min(limit, 100), 1)
+
     query = select(Event)
 
-    if status:
-        query = query.where(Event.status == status)
+    if event_status:
+        query = query.where(Event.status == event_status)
     if region:
         # target_regions is stored as a JSON array of region strings.
         query = query.where(Event.target_regions.contains([region]))
@@ -111,13 +115,18 @@ async def approve_event(
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
+    if event.status not in {"draft", "voting"}:
+        raise HTTPException(status_code=409, detail=f"Cannot approve event with status '{event.status}'")
+
     event.status = "approved"
     await db.flush()
     return event
 
 
 @router.post("/{event_id}/send-invitations")
+@limiter.limit(RATE_LIMITS["INVITATIONS_SEND"])
 async def send_invitations(
+    request: Request,
     event_id: UUID,
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
@@ -132,12 +141,17 @@ async def send_invitations(
 
 
 @router.post("/{event_id}/vote", response_model=EventVoteResponse)
+@limiter.limit("30/minute")
 async def vote_event(
+    request: Request,
     event_id: UUID,
     body: EventVoteCreate,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    if user.role != "teacher":
+        raise HTTPException(status_code=403, detail="Teacher access required")
+
     vote_value = body.vote
     if vote_value not in {"approve", "reject"}:
         raise HTTPException(status_code=400, detail="Vote must be approve or reject")
@@ -146,6 +160,9 @@ async def vote_event(
     event = event_result.scalar_one_or_none()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
+
+    if event.status != "voting":
+        raise HTTPException(status_code=409, detail="Event is not currently open for voting")
 
     result = await db.execute(select(EventVote).where(EventVote.event_id == event_id, EventVote.user_id == user.id))
     vote = result.scalar_one_or_none()
@@ -160,7 +177,9 @@ async def vote_event(
 
 
 @router.post("/{event_id}/rsvp", response_model=EventRSVPResponse)
+@limiter.limit("30/minute")
 async def rsvp_event(
+    request: Request,
     event_id: UUID,
     body: EventRSVPCreate,
     user: User = Depends(get_current_user),
@@ -175,6 +194,9 @@ async def rsvp_event(
     event = event_result.scalar_one_or_none()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
+
+    if event.status not in {"approved", "scheduled"}:
+        raise HTTPException(status_code=409, detail="RSVPs are only accepted for approved or scheduled events")
 
     profile_result = await db.execute(select(TeacherProfile).where(TeacherProfile.user_id == user.id))
     profile = profile_result.scalar_one_or_none()
@@ -214,7 +236,9 @@ async def get_event_rsvps(
 
 
 @router.post("/{event_id}/sentiments", response_model=SentimentResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("20/minute")
 async def submit_sentiment(
+    request: Request,
     event_id: UUID,
     body: SentimentCreate,
     user: User = Depends(get_current_user),
@@ -227,6 +251,9 @@ async def submit_sentiment(
     event = event_result.scalar_one_or_none()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
+
+    if event.status != "completed":
+        raise HTTPException(status_code=409, detail="Sentiment feedback is only accepted for completed events")
 
     profile_result = await db.execute(select(TeacherProfile).where(TeacherProfile.user_id == user.id))
     profile = profile_result.scalar_one_or_none()
@@ -251,6 +278,9 @@ async def get_event_sentiments(
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
+    skip = max(skip, 0)
+    limit = max(min(limit, 100), 1)
+
     event_result = await db.execute(select(Event).where(Event.id == event_id))
     event = event_result.scalar_one_or_none()
     if not event:

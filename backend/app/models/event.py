@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from typing import TYPE_CHECKING
 
 from sqlalchemy import String, Boolean, Integer, Text, ForeignKey, Enum as SAEnum, UniqueConstraint
@@ -22,9 +22,9 @@ class Event(Base):
     event_type: Mapped[str] = mapped_column(String(100), nullable=True)
     target_subject: Mapped[str] = mapped_column(String(100), nullable=True)
     target_subject_branch: Mapped[str] = mapped_column(String(100), nullable=True)
-    target_grade_levels: Mapped[dict] = mapped_column(JSONB, nullable=True)
-    target_regions: Mapped[dict] = mapped_column(JSONB, nullable=True)
-    target_provinces: Mapped[dict] = mapped_column(JSONB, nullable=True)
+    target_grade_levels: Mapped[list] = mapped_column(JSONB, nullable=True)
+    target_regions: Mapped[list] = mapped_column(JSONB, nullable=True)
+    target_provinces: Mapped[list] = mapped_column(JSONB, nullable=True)
     target_audience_criteria: Mapped[dict] = mapped_column(JSONB, nullable=True)
     recommended_format: Mapped[str] = mapped_column(String(100), nullable=True)
     priority_timeline: Mapped[str] = mapped_column(String(50), nullable=True)
@@ -52,8 +52,8 @@ class Event(Base):
     rsvp_deadline: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
 
     created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     voided_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
 
     votes: Mapped[list["EventVote"]] = relationship(back_populates="event", cascade="all, delete-orphan")
@@ -68,7 +68,7 @@ class EventVote(Base):
     event_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("events.id"), nullable=False)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
     vote: Mapped[str] = mapped_column(SAEnum("approve", "reject", name="vote_type"), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     event: Mapped["Event"] = relationship(back_populates="votes")
 
@@ -85,6 +85,10 @@ class EventRSVP(Base):
     teacher_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("teacher_profiles.id"), nullable=False)
     interested: Mapped[bool] = mapped_column(Boolean, default=True)
     attended: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     event: Mapped["Event"] = relationship(back_populates="rsvps")
+
+    __table_args__ = (
+        UniqueConstraint("event_id", "teacher_id", name="uq_one_rsvp_per_teacher"),
+    )
