@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { FlaskConical, Save, User } from 'lucide-react'
+import { Save, User } from 'lucide-react'
 
 const STEPS = [
   { number: 1, title: 'Basic Identity', subtitle: 'Personal & School Information', path: '/onboarding/1' },
@@ -22,9 +22,7 @@ export default function OnboardingLayout() {
         <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-[#001e40] flex items-center justify-center">
-              <FlaskConical className="w-3.5 h-3.5 text-white" />
-            </div>
+            <img src="/src/assets/logo.png" alt="PHolaris Logo" className="w-10 h-10 object-contain" />
             <span className="font-bold text-[#001e40] text-sm tracking-tight" style={{ fontFamily: 'Manrope, sans-serif' }}>
               PHOLARIS
             </span>

@@ -60,7 +60,7 @@ export default function Register() {
         {/* LEFT — Dark sticky hero panel */}
         <div
           className="hidden lg:sticky lg:top-0 lg:flex lg:w-[45%] lg:h-screen relative flex-col justify-between p-12 overflow-hidden flex-shrink-0"
-          style={{ background: 'linear-gradient(145deg, #001228 0%, #001e40 50%, #0a2d5a 100%)' }}
+          style={{ background: 'linear-gradient(145deg, #001e40 0%, #0a2d5a 50%, #0f3a7a 100%)' }}
         >
           {/* Background decorative elements */}
           <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -83,9 +83,7 @@ export default function Register() {
 
           {/* Logo */}
           <div className="relative z-10 flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
-              <FlaskConical className="w-4 h-4 text-white" />
-            </div>
+            <img src="/src/assets/logo.png" alt="PHolaris Logo" className="w-12 h-12 object-contain" />
             <span
               className="text-white font-bold text-lg tracking-tight"
               style={{ fontFamily: 'Manrope, sans-serif' }}
