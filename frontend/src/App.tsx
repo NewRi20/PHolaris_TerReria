@@ -11,7 +11,7 @@ import TeacherDashboard from "./components/TeacherDashboard";
 import TeacherProfile from "./components/TeacherProfile";
 
 function App() {
-  // Set your default starting view here
+  // Set your default starting view here (e.g., 'admin-dashboard' or 'teacher-portal')
   const [currentView, setCurrentView] = useState('admin-dashboard');
 
   const renderAdminView = () => {
@@ -24,46 +24,22 @@ function App() {
     }
   };
 
-  // --- TEMPORARY DEV SWITCHER LOGIC ---
-// Replace the old isTeacherView line with this one:
-const isTeacherView = currentView === 'teacher-portal' || currentView === 'teacher-profile';
-  
-  const toggleRole = () => {
-    setCurrentView(isTeacherView ? 'admin-dashboard' : 'teacher-portal');
-  };
+  const isTeacherView = currentView === 'teacher-portal' || currentView === 'teacher-profile';
 
-  // The floating button component
-  const DevToggleButton = () => (
-    <button
-      onClick={toggleRole}
-      className="fixed bottom-6 right-6 z-[9999] bg-slate-900 text-white px-5 py-3 rounded-full shadow-2xl font-bold text-xs flex items-center gap-2 hover:bg-slate-800 hover:scale-105 active:scale-95 transition-all border-2 border-white/10"
-    >
-      <span className="material-symbols-outlined text-[18px]">swap_horiz</span>
-      Switch to {isTeacherView ? 'Admin' : 'Teacher'}
-    </button>
-  );
-  // ------------------------------------
-
-// Switch to Teacher Portal view
+  // 1. Teacher Portal Routing
   if (isTeacherView) {
     return (
-      <>
-        <TeacherLayout currentView={currentView} setCurrentView={setCurrentView}>
-          {currentView === 'teacher-profile' ? <TeacherProfile /> : <TeacherDashboard />}
-        </TeacherLayout>
-        <DevToggleButton />
-      </>
+      <TeacherLayout currentView={currentView} setCurrentView={setCurrentView}>
+        {currentView === 'teacher-profile' ? <TeacherProfile /> : <TeacherDashboard />}
+      </TeacherLayout>
     );
   }
 
-  // Default Admin Portal view
+  // 2. Admin Portal Routing (Default)
   return (
-    <>
-      <AdminLayout currentView={currentView} setCurrentView={setCurrentView}>
-        {renderAdminView()}
-      </AdminLayout>
-      <DevToggleButton />
-    </>
+    <AdminLayout currentView={currentView} setCurrentView={setCurrentView}>
+      {renderAdminView()}
+    </AdminLayout>
   );
 }
 
