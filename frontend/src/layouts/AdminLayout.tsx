@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import pholarisLogo from '../assets/pholarislogo.png';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -25,8 +26,12 @@ export default function AdminLayout({ children, currentView, setCurrentView }: A
       {/* Collapsible SideNavBar */}
       <aside className="group w-[4.5rem] hover:w-72 fixed left-0 top-0 bottom-0 flex flex-col bg-slate-50 border-r border-slate-200 transition-all duration-300 ease-in-out z-50 overflow-hidden">
         <div className="px-4 py-6 mb-4 flex items-center gap-3 w-72">
-          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-white" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+          <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 bg-transparent flex items-center justify-center shadow-sm">
+            <img 
+              src={pholarisLogo} 
+              alt="Pholaris Logo" 
+              className="w-full h-full object-contain"
+            />
           </div>
           <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
             <h1 className="text-lg font-extrabold text-blue-900 font-headline leading-tight whitespace-nowrap">Precision Scholar</h1>
@@ -83,7 +88,7 @@ export default function AdminLayout({ children, currentView, setCurrentView }: A
               <input className="bg-transparent border-none focus:outline-none text-sm font-medium w-full text-slate-700" placeholder="Search by name, ID, or school..." type="text"/>
             </div>*/}
          
-            <span className="text-xl font-bold tracking-tighter text-sky-950 font-headline hidden sm:block">DOST STAR Integrated System</span>
+            <span className="text-xl font-bold tracking-tighter text-sky-950 font-headline hidden sm:block">PHOLARIS</span>
             <span className="text-xl font-bold tracking-tighter text-sky-950 font-headline sm:hidden">DOST STAR</span>
           </div>
           
