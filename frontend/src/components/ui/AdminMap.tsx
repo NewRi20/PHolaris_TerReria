@@ -1,8 +1,15 @@
-import React from 'react';
 import { MapContainer, TileLayer, GeoJSON } from 'react-leaflet';
 import phRegionsData from "../../assets/regions.json";
 
-const mockRegionData = [
+// Define the shape of your backend data
+export interface RegionRiskData {
+  name: string;
+  flags: number;
+  needs: string;
+}
+
+// Keep mock data as the default fallback
+const DEFAULT_MOCK_DATA: RegionRiskData[] = [
   { name: "National Capital Region", flags: 1, needs: "Standard Upskilling" },
   { name: "Ilocos", flags: 5, needs: "Urgent Capacity Building" },
   { name: "Cagayan Valley", flags: 2, needs: "Resources" },
@@ -42,8 +49,12 @@ const provinceToRegion: Record<string, string> = {
   "City of Manila": "National Capital Region", "NCR": "National Capital Region", "Metropolitan Manila": "National Capital Region"
 };
 
-// FIX: Renamed from RegionalMap to AdminMap
-export default function AdminMap() {
+// Make the component accept props
+interface AdminMapProps {
+  data?: RegionRiskData[];
+}
+
+export default function AdminMap({ data = DEFAULT_MOCK_DATA }: AdminMapProps) {
   
   const getRegionColor = (flags: number) => {
     if (flags >= 5) return '#ef4444'; 
@@ -56,7 +67,9 @@ export default function AdminMap() {
   const resolveRegionData = (properties: any) => {
     const rawJsonString = properties.adm1_en || properties.NAME_1 || properties.REGION || properties.adm2_en || properties.name || "";
     const mappedRegion = provinceToRegion[rawJsonString] || rawJsonString;
-    const matched = mockRegionData.find(d => {
+    
+    // Look up the matching data from the injected 'data' prop
+    const matched = data.find(d => {
       const safeJson = mappedRegion.toUpperCase();
       const safeMock = d.name.toUpperCase();
       return safeJson.includes(safeMock) || safeMock.includes(safeJson) || (safeJson.includes("NCR") && safeMock.includes("CAPITAL"));
@@ -76,7 +89,7 @@ export default function AdminMap() {
       fillColor: getRegionColor(flags),
       weight: 1.5,
       opacity: 0.9,
-      color: '#1e293b', // FIX: Dark slate borders instead of white
+      color: '#1e293b', 
       fillOpacity: 0.75,
     };
   };
@@ -86,7 +99,6 @@ export default function AdminMap() {
     const flagColorClass = flags >= 4 ? 'color: #f87171;' : flags >= 3 ? 'color: #fbbf24;' : 'color: #cbd5e1;';
     const displayTitle = rawName !== regionName && rawName !== "" ? `${rawName} <span style="font-size: 11px; font-weight: normal; color: #94a3b8;">(${regionName})</span>` : regionName;
 
-    // FIX: Dark mode HTML for the Tooltip
     const tooltipContent = `
       <div style="font-family: 'Inter', sans-serif; min-width: 220px;">
         <div style="font-size: 10px; color: #818cf8; text-transform: uppercase; font-weight: 700; margin-bottom: 4px; letter-spacing: 0.05em;">
@@ -115,7 +127,6 @@ export default function AdminMap() {
 
   return (
     <div className="h-[600px] w-full rounded-xl overflow-hidden border border-slate-800 bg-slate-950 shadow-lg relative z-0">
-      
       <div className="absolute bottom-6 right-6 z-[1000] bg-[#0f172a]/95 border border-slate-700 p-4 rounded-xl shadow-2xl backdrop-blur-sm pointer-events-auto">
         <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Risk Level</h3>
         <div className="space-y-2.5">
@@ -129,7 +140,12 @@ export default function AdminMap() {
 
       <MapContainer center={[12.8797, 121.7740]} zoom={6} style={{ height: '100%', width: '100%', background: '#09090b' }}>
         <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
-        <GeoJSON data={phRegionsData as any} style={styleRegion} onEachFeature={onEachFeature} />
+        <GeoJSON 
+          key={JSON.stringify(data)} // THE MAGIC FIX: Re-renders when backend data changes
+          data={phRegionsData as any} 
+          style={styleRegion} 
+          onEachFeature={onEachFeature} 
+        />
       </MapContainer>
     </div>
   );
