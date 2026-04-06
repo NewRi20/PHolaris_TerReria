@@ -13,6 +13,7 @@ export interface AuthUser {
 	full_name: string | null;
 	role: AuthRole;
 	is_active: boolean;
+	onboarding_complete: boolean;
 }
 
 export interface AuthTokens {

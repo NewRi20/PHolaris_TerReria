@@ -29,7 +29,7 @@ class TeacherProfile(Base):
     teaching_outside_specialization: Mapped[bool] = mapped_column(Boolean, default=False)
     years_experience: Mapped[int] = mapped_column(Integer, nullable=True)
     num_classes: Mapped[int] = mapped_column(Integer, nullable=True)
-    students_per_class: Mapped[dict] = mapped_column(JSONB, nullable=True)  # e.g. [35, 40, 38]
+    students_per_class: Mapped[list[int] | None] = mapped_column(JSONB, nullable=True)  # e.g. [35, 40, 38]
     working_hours_per_week: Mapped[float] = mapped_column(Float, nullable=True)
     last_training_date: Mapped[date] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(SATIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))

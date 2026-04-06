@@ -12,6 +12,7 @@ from app.models.training import Training
 from app.models.badge import Badge
 from app.core.dependencies import get_current_user, require_admin
 from app.services.analytics_cache import mark_analytics_cache_stale
+from app.services.onboarding import is_teacher_profile_complete
 from app.schemas.teacher import (
     TeacherProfileUpdate,
     TeacherProfileResponse,
@@ -53,7 +54,7 @@ async def update_my_profile(
 
     mark_analytics_cache_stale()
     await db.flush()
-    return profile
+    return _build_profile_response(profile)
 
 
 # ─── Trainings ───────────────────────────────────────────────
@@ -145,7 +146,8 @@ async def list_teachers(
     query = query.offset(skip).limit(limit)
 
     result = await db.execute(query)
-    return result.scalars().all()
+    profiles = result.scalars().all()
+    return [_build_profile_response(profile) for profile in profiles]
 
 
 @router.get("/{teacher_id}", response_model=TeacherFullResponse)
@@ -186,9 +188,15 @@ async def _get_profile_with_relations(db: AsyncSession, *, user_id: UUID | None 
 
 def _build_full_response(profile: TeacherProfile, user: User) -> TeacherFullResponse:
     return TeacherFullResponse(
-        profile=TeacherProfileResponse.model_validate(profile),
+        profile=_build_profile_response(profile),
         trainings=[TrainingResponse.model_validate(t) for t in profile.trainings],
         badges=[BadgeResponse.model_validate(b) for b in profile.badges],
         email=user.email,
         full_name=user.full_name,
+    )
+
+
+def _build_profile_response(profile: TeacherProfile) -> TeacherProfileResponse:
+    return TeacherProfileResponse.model_validate(profile).model_copy(
+        update={"onboarding_complete": is_teacher_profile_complete(profile)}
     )
