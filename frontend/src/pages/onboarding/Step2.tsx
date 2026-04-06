@@ -1,6 +1,6 @@
-import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronDown, BookOpen, ShieldCheck, TrendingUp } from 'lucide-react'
+import { useOnboard } from '@/hooks/useOnboard'
 
 const GRADE_LEVELS = [
   'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10',
@@ -9,16 +9,17 @@ const GRADE_LEVELS = [
 
 export default function Step2AcademicProfile() {
   const navigate = useNavigate()
-  const [form, setForm] = useState({
-    gradeLevel: '',
-    areaOfSpecialization: '',
-    subjectTaught: '',
-    teachingOutsideSpecialization: false,
-  })
+  const { onboardingData, updateOnboardingData, saveOnboardingFields, isSaving } = useOnboard()
 
-  const set = (field: keyof typeof form) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-      setForm({ ...form, [field]: e.target.value })
+  const handleContinue = async () => {
+    await saveOnboardingFields({
+      grade_level_taught: onboardingData.grade_level_taught,
+      specialization: onboardingData.specialization,
+      current_subject: onboardingData.current_subject,
+      teaching_outside_specialization: onboardingData.teaching_outside_specialization,
+    })
+    navigate('/onboarding/3')
+  }
 
   return (
     <div className="space-y-6">
@@ -61,8 +62,8 @@ export default function Step2AcademicProfile() {
               </label>
               <div className="relative">
                 <select
-                  value={form.gradeLevel}
-                  onChange={set('gradeLevel')}
+                  value={onboardingData.grade_level_taught}
+                  onChange={(e) => updateOnboardingData({ grade_level_taught: e.target.value })}
                   className="w-full px-4 py-2.5 rounded-xl bg-[#f9f9fd] text-[#1a1c1e] text-sm outline-none focus:ring-2 focus:ring-[#115cb9]/25 transition-all appearance-none pr-9"
                   style={{ fontFamily: 'Inter, sans-serif' }}
                 >
@@ -85,8 +86,8 @@ export default function Step2AcademicProfile() {
               <input
                 type="text"
                 placeholder="e.g. Theoretical Physics"
-                value={form.areaOfSpecialization}
-                onChange={set('areaOfSpecialization')}
+                  value={onboardingData.specialization}
+                  onChange={(e) => updateOnboardingData({ specialization: e.target.value })}
                 className="w-full px-4 py-2.5 rounded-xl bg-[#f9f9fd] text-[#1a1c1e] placeholder:text-[#44474e]/30 text-sm outline-none focus:ring-2 focus:ring-[#115cb9]/25 transition-all"
                 style={{ fontFamily: 'Inter, sans-serif' }}
               />
@@ -108,8 +109,8 @@ export default function Step2AcademicProfile() {
               <input
                 type="text"
                 placeholder="e.g. Advanced Calculus & Differential Equations"
-                value={form.subjectTaught}
-                onChange={set('subjectTaught')}
+                  value={onboardingData.current_subject}
+                  onChange={(e) => updateOnboardingData({ current_subject: e.target.value })}
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#f9f9fd] text-[#1a1c1e] placeholder:text-[#44474e]/30 text-sm outline-none focus:ring-2 focus:ring-[#115cb9]/25 transition-all"
                 style={{ fontFamily: 'Inter, sans-serif' }}
               />
@@ -137,14 +138,14 @@ export default function Step2AcademicProfile() {
               <span className="text-xs text-[#44474e]/50" style={{ fontFamily: 'Inter, sans-serif' }}>NO</span>
               <button
                 type="button"
-                onClick={() => setForm({ ...form, teachingOutsideSpecialization: !form.teachingOutsideSpecialization })}
+                  onClick={() => updateOnboardingData({ teaching_outside_specialization: !onboardingData.teaching_outside_specialization })}
                 className={`relative w-11 h-6 rounded-full transition-all duration-200 ${
-                  form.teachingOutsideSpecialization ? 'bg-[#115cb9]' : 'bg-[#e1e1e7]'
+                  onboardingData.teaching_outside_specialization ? 'bg-[#115cb9]' : 'bg-[#e1e1e7]'
                 }`}
               >
                 <span
                   className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all duration-200 ${
-                    form.teachingOutsideSpecialization ? 'left-[1.375rem]' : 'left-0.5'
+                    onboardingData.teaching_outside_specialization ? 'left-[1.375rem]' : 'left-0.5'
                   }`}
                 />
               </button>
@@ -168,11 +169,12 @@ export default function Step2AcademicProfile() {
 
           <div className="flex items-center gap-3">
             <button
-              onClick={() => navigate('/onboarding/3')}
+              onClick={handleContinue}
+              disabled={isSaving}
               className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#001e40] to-[#1a3a5c] text-white text-sm font-semibold hover:shadow-[0_4px_20px_rgba(0,30,64,0.25)] active:scale-[0.99] transition-all"
               style={{ fontFamily: 'Manrope, sans-serif' }}
             >
-              Continue
+              {isSaving ? 'Saving...' : 'Continue'}
               <svg className="w-4 h-4" fill="none" viewBox="0 0 16 16">
                 <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>

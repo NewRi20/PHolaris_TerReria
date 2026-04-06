@@ -1,17 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Trash2, ChevronDown, BookOpen, Monitor, Users, ShieldCheck, TrendingUp } from 'lucide-react'
+import { useOnboard } from '@/hooks/useOnboard'
 
 type TrainingCategory = 'Subject Mastery' | 'Digital Literacy' | 'Soft Skills' | 'Pedagogy' | 'Other'
 type TrainingStatus = 'Valid' | 'Expiring Soon' | 'Expired'
-
-interface TrainingEntry {
-  id: string
-  title: string
-  category: TrainingCategory
-  completionDate: string
-  status: TrainingStatus
-}
 
 const CATEGORIES: TrainingCategory[] = [
   'Subject Mastery', 'Digital Literacy', 'Soft Skills', 'Pedagogy', 'Other',
@@ -51,11 +44,7 @@ const statusStyles: Record<TrainingStatus, string> = {
 
 export default function Step4ProfDevAudit() {
   const navigate = useNavigate()
-  const [trainings, setTrainings] = useState<TrainingEntry[]>([
-    { id: '1', title: 'Quantum Physics Curriculum Design', category: 'Subject Mastery', completionDate: '2023-12-12', status: 'Valid' },
-    { id: '2', title: 'Digital Classroom Transformation', category: 'Digital Literacy', completionDate: '2023-08-05', status: 'Valid' },
-    { id: '3', title: 'Conflict Resolution in Labs', category: 'Soft Skills', completionDate: '2023-02-19', status: 'Expiring Soon' },
-  ])
+  const { trainings, addTraining, removeTraining, saveTrainings, isSaving } = useOnboard()
 
   const [newEntry, setNewEntry] = useState({
     title: '',
@@ -66,19 +55,17 @@ export default function Step4ProfDevAudit() {
   const handleAddEntry = () => {
     if (!newEntry.title || !newEntry.category || !newEntry.completionDate) return
     const status = getTrainingStatus(newEntry.completionDate)
-    const entry: TrainingEntry = {
-      id: Date.now().toString(),
+    addTraining({
       title: newEntry.title,
       category: newEntry.category as TrainingCategory,
       completionDate: newEntry.completionDate,
       status,
-    }
-    setTrainings([...trainings, entry])
+    })
     setNewEntry({ title: '', category: '', completionDate: '' })
   }
 
   const handleDelete = (id: string) => {
-    setTrainings(trainings.filter((t) => t.id !== id))
+    removeTraining(id)
   }
 
   const formatDate = (dateStr: string) => {
@@ -287,11 +274,15 @@ export default function Step4ProfDevAudit() {
           </button>
 
           <button
-            onClick={() => console.log('Complete onboarding')}
+            onClick={async () => {
+              await saveTrainings()
+              navigate('/app/teacher/dashboard')
+            }}
+            disabled={isSaving}
             className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#001e40] to-[#1a3a5c] text-white text-sm font-semibold hover:shadow-[0_4px_20px_rgba(0,30,64,0.25)] active:scale-[0.99] transition-all"
             style={{ fontFamily: 'Manrope, sans-serif' }}
           >
-            Complete Onboarding
+            {isSaving ? 'Saving...' : 'Complete Onboarding'}
             <svg className="w-4 h-4" fill="none" viewBox="0 0 16 16">
               <path d="M2 8l4 4 8-8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>

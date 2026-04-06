@@ -1,25 +1,21 @@
-import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronDown, ShieldCheck, TrendingUp } from 'lucide-react'
 import regionsData from '@/constant/regions/regions_provinces.json'
+import { useOnboard } from '@/hooks/useOnboard'
 
 export default function Step1BasicIdentity() {
   const navigate = useNavigate()
-  const [form, setForm] = useState({
-    teacherId: '',
-    fullName: '',
-    schoolName: '',
-    region: '',
-    divisionProvince: '',
-  })
+  const { onboardingData, updateOnboardingData, saveOnboardingFields, isSaving } = useOnboard()
 
-  const set = (field: keyof typeof form) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-      setForm({ ...form, [field]: e.target.value })
+  const selectedRegion = regionsData.regions.find((r) => r.code === onboardingData.region)
 
-  const selectedRegion = regionsData.regions.find((r) => r.code === form.region)
-
-  const handleContinue = () => {
+  const handleContinue = async () => {
+    await saveOnboardingFields({
+      teacher_id_number: onboardingData.teacher_id_number,
+      school: onboardingData.school,
+      region: onboardingData.region,
+      province: onboardingData.province,
+    })
     navigate('/onboarding/2')
   }
 
@@ -65,8 +61,8 @@ export default function Step1BasicIdentity() {
               <input
                 type="text"
                 placeholder="e.g. T-1234567"
-                value={form.teacherId}
-                onChange={set('teacherId')}
+                value={onboardingData.teacher_id_number}
+                onChange={(e) => updateOnboardingData({ teacher_id_number: e.target.value })}
                 className="w-full px-4 py-2.5 rounded-xl bg-[#f9f9fd] text-[#1a1c1e] placeholder:text-[#44474e]/30 text-sm outline-none focus:ring-2 focus:ring-[#115cb9]/25 transition-all"
                 style={{ fontFamily: 'Inter, sans-serif' }}
               />
@@ -82,8 +78,8 @@ export default function Step1BasicIdentity() {
               <input
                 type="text"
                 placeholder="First Name, Middle Initial, Surname"
-                value={form.fullName}
-                onChange={set('fullName')}
+                value={onboardingData.teacherName}
+                onChange={(e) => updateOnboardingData({ teacherName: e.target.value })}
                 className="w-full px-4 py-2.5 rounded-xl bg-[#f9f9fd] text-[#1a1c1e] placeholder:text-[#44474e]/30 text-sm outline-none focus:ring-2 focus:ring-[#115cb9]/25 transition-all"
                 style={{ fontFamily: 'Inter, sans-serif' }}
               />
@@ -101,8 +97,8 @@ export default function Step1BasicIdentity() {
             <input
               type="text"
               placeholder="Complete Name of Educational Institution"
-              value={form.schoolName}
-              onChange={set('schoolName')}
+              value={onboardingData.school}
+              onChange={(e) => updateOnboardingData({ school: e.target.value })}
               className="w-full px-4 py-2.5 rounded-xl bg-[#f9f9fd] text-[#1a1c1e] placeholder:text-[#44474e]/30 text-sm outline-none focus:ring-2 focus:ring-[#115cb9]/25 transition-all"
               style={{ fontFamily: 'Inter, sans-serif' }}
             />
@@ -119,9 +115,9 @@ export default function Step1BasicIdentity() {
               </label>
               <div className="relative">
                 <select
-                  value={form.region}
+                  value={onboardingData.region}
                   onChange={(e) => {
-                    setForm({ ...form, region: e.target.value, divisionProvince: '' })
+                    updateOnboardingData({ region: e.target.value, province: '' })
                   }}
                   className="w-full px-4 py-2.5 rounded-xl bg-[#f9f9fd] text-[#1a1c1e] text-sm outline-none focus:ring-2 focus:ring-[#115cb9]/25 transition-all appearance-none pr-9"
                   style={{ fontFamily: 'Inter, sans-serif' }}
@@ -144,14 +140,14 @@ export default function Step1BasicIdentity() {
               </label>
               <div className="relative">
                 <select
-                  value={form.divisionProvince}
-                  onChange={set('divisionProvince')}
-                  disabled={!form.region}
+                  value={onboardingData.province}
+                  onChange={(e) => updateOnboardingData({ province: e.target.value })}
+                  disabled={!onboardingData.region}
                   className="w-full px-4 py-2.5 rounded-xl bg-[#f9f9fd] text-[#1a1c1e] text-sm outline-none focus:ring-2 focus:ring-[#115cb9]/25 transition-all appearance-none pr-9 disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{ fontFamily: 'Inter, sans-serif' }}
                 >
                   <option value="" disabled>
-                    {form.region ? 'Select Province' : 'Select region first'}
+                    {onboardingData.region ? 'Select Province' : 'Select region first'}
                   </option>
                   {selectedRegion?.provinces.map((p) => (
                     <option key={p} value={p}>{p}</option>
@@ -166,6 +162,7 @@ export default function Step1BasicIdentity() {
         {/* Footer actions */}
         <div className="px-8 py-5 bg-[#f9f9fd] flex items-center justify-between">
           <button
+            disabled={isSaving}
             className="flex items-center gap-1.5 text-sm text-[#44474e]/60 hover:text-[#001e40] transition-colors"
             style={{ fontFamily: 'Inter, sans-serif' }}
           >
@@ -177,10 +174,11 @@ export default function Step1BasicIdentity() {
 
           <button
             onClick={handleContinue}
+            disabled={isSaving}
             className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#001e40] to-[#1a3a5c] text-white text-sm font-semibold hover:shadow-[0_4px_20px_rgba(0,30,64,0.25)] active:scale-[0.99] transition-all"
             style={{ fontFamily: 'Manrope, sans-serif' }}
           >
-            Continue
+            {isSaving ? 'Saving...' : 'Continue'}
             <svg className="w-4 h-4" fill="none" viewBox="0 0 16 16">
               <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
