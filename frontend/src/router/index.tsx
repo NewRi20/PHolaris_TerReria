@@ -12,6 +12,7 @@ import UnderservedAreas from '@/components/UnderservedAreas'
 import EventsManagement from '@/components/EventsManagement'
 import TeacherDirectory from '@/components/TeacherDirectory'
 import TeacherDashboard from '@/components/TeacherDashboard'
+import TeacherProfile from '@/components/TeacherProfile'
 import AdminPortalLayout from '@/pages/admin/AdminPortalLayout'
 import TeacherPortalLayout from '@/pages/teacher/TeacherPortalLayout'
 import { AppHomeRedirect, ProtectedRoute, PublicOnlyRoute, RoleProtectedRoute } from './guards'
@@ -68,6 +69,7 @@ const router = createBrowserRouter([
             children: [
               { index: true, element: <Navigate to="dashboard" replace /> },
               { path: 'dashboard', element: <TeacherDashboard /> },
+              { path: 'profile', element: <TeacherProfile /> },
             ],
           },
         ],
