@@ -2,24 +2,16 @@ import { useState } from 'react';
 import { MapContainer, TileLayer, GeoJSON, Popup } from 'react-leaflet';
 import phRegionsData from "../../assets/regions.json"; 
 
-// Define shape of backend data
-export interface RegionalEventData {
-  name: string;
-  event: string;
+export interface MapEventData {
+  region: string;
+  title: string;
+  topic: string;
   date: string;
   status: "active" | "drought" | "historical";
 }
 
-// Default fallback data
-const DEFAULT_EVENT_DATA: RegionalEventData[] = [
-  { name: "National Capital Region", event: "EdTech Innovation Summit", date: "April 15, 2026", status: "active" },
-  { name: "Ilocos", event: "No recent training", date: "N/A", status: "drought" },
-  { name: "Cagayan Valley", event: "Agriculture & STEM Seminar", date: "May 5, 2026", status: "active" },
-  { name: "Central Luzon", event: "Past Digital Bootcamp", date: "March 2025", status: "historical" },
-  { name: "CALABARZON", event: "Math Teachers Symposium", date: "May 10, 2026", status: "active" },
-  { name: "Eastern Visayas", event: "Severely underserved", date: "N/A", status: "drought" },
-  { name: "Default", event: "General Assembly", date: "TBA", status: "historical" } 
-];
+// EMPTY by default. Waiting for the parent (TeacherDashboard) to pass backend data via props.
+const DEFAULT_EVENT_DATA: MapEventData[] = [];
 
 const provinceToRegion: Record<string, string> = {
   "Ilocos Norte": "Ilocos", "Ilocos Sur": "Ilocos", "La Union": "Ilocos", "Pangasinan": "Ilocos",
@@ -41,12 +33,12 @@ const provinceToRegion: Record<string, string> = {
   "City of Manila": "National Capital Region", "NCR": "National Capital Region", "Metropolitan Manila": "National Capital Region"
 };
 
-// Map accepts data prop
 interface TeacherMapProps {
-  data?: RegionalEventData[];
+  data?: MapEventData[];
+  onEventAction?: (actionType: 'register' | 'request', eventData: any) => void;
 }
 
-export default function TeacherMap({ data = DEFAULT_EVENT_DATA }: TeacherMapProps) {
+export default function TeacherMap({ data = DEFAULT_EVENT_DATA, onEventAction }: TeacherMapProps) {
   const [activeRegion, setActiveRegion] = useState<any>(null);
   
   const getStatusColor = (status: string) => {
@@ -57,20 +49,26 @@ export default function TeacherMap({ data = DEFAULT_EVENT_DATA }: TeacherMapProp
   };
 
   const resolveEventData = (properties: any) => {
+    if (!properties) return { regionName: "Unknown", title: "General Assembly", topic: "General", date: "TBA", status: "historical", rawName: "" };
+
     const rawJsonString = properties.adm1_en || properties.NAME_1 || properties.REGION || properties.adm2_en || properties.name || "";
-    const mappedRegion = provinceToRegion[rawJsonString] || rawJsonString;
+    const mappedRegion = provinceToRegion[rawJsonString] || rawJsonString || "";
     
-    const matched = data.find(d => {
-      const safeJson = mappedRegion.toUpperCase();
-      const safeMock = d.name.toUpperCase();
+    // Strict match logic preventing the toUpperCase undefined crash
+    const matched = data?.find(d => {
+      if (!d || !d.region) return false;
+      const safeJson = String(mappedRegion).toUpperCase();
+      const safeMock = String(d.region).toUpperCase();
+      
+      if (!safeJson || !safeMock) return false;
+      
       return safeJson.includes(safeMock) || safeMock.includes(safeJson) || (safeJson.includes("NCR") && safeMock.includes("CAPITAL"));
     });
 
     if (matched) {
-      return { regionName: mappedRegion, event: matched.event, date: matched.date, status: matched.status, rawName: rawJsonString };
+      return { regionName: mappedRegion, title: matched.title, topic: matched.topic, date: matched.date, status: matched.status, rawName: rawJsonString };
     } else {
-      const defaultEvent = data.find(d => d.name === "Default");
-      return { regionName: mappedRegion || "Unknown", event: defaultEvent?.event, date: defaultEvent?.date, status: defaultEvent?.status || "historical", rawName: rawJsonString };
+      return { regionName: mappedRegion || "Unknown", title: "General Assembly", topic: "General", date: "TBA", status: "historical", rawName: rawJsonString };
     }
   };
 
@@ -94,20 +92,15 @@ export default function TeacherMap({ data = DEFAULT_EVENT_DATA }: TeacherMapProp
     });
   };
 
-  const handleAction = (actionType: string) => {
-    if (actionType === 'register') {
-      alert(`Awesome! You registered for the ${activeRegion.regionName} event.`);
-    } else if (actionType === 'decline') {
-      alert('Maybe next time!');
-    } else if (actionType === 'request') {
-      alert(`You have requested training for ${activeRegion.regionName}.`);
+  const handleActionClick = (actionType: 'register' | 'decline' | 'request') => {
+    if (actionType !== 'decline' && onEventAction) {
+      onEventAction(actionType, activeRegion);
     }
     setActiveRegion(null); 
   };
 
   return (
-    <div className="h-[600px] w-full rounded-xl overflow-hidden border border-slate-800 bg-slate-950 shadow-lg relative z-0">
-      
+    <div className="h-full w-full bg-slate-950 relative z-0">
       <div className="absolute bottom-6 right-6 z-[1000] bg-[#0f172a]/95 border border-slate-700 p-4 rounded-xl shadow-2xl backdrop-blur-sm pointer-events-auto">
         <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Event Status</h3>
         <div className="space-y-2.5">
@@ -120,7 +113,7 @@ export default function TeacherMap({ data = DEFAULT_EVENT_DATA }: TeacherMapProp
       <MapContainer center={[12.8797, 121.7740]} zoom={6} style={{ height: '100%', width: '100%', background: '#09090b' }}>
         <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
         <GeoJSON 
-          key={JSON.stringify(data)} // THE MAGIC FIX
+          key={JSON.stringify(data)} 
           data={phRegionsData as any} 
           style={styleRegion} 
           onEachFeature={onEachFeature} 
@@ -142,8 +135,11 @@ export default function TeacherMap({ data = DEFAULT_EVENT_DATA }: TeacherMapProp
                 )}
               </div>
               <div className="mb-4">
-                <strong className="text-slate-50 text-sm block mb-1">{activeRegion.event}</strong>
-                <span className="text-slate-400 text-xs flex items-center gap-1.5">
+                <strong className="text-slate-50 text-sm block mb-1">{activeRegion.title}</strong>
+                {activeRegion.status === 'active' && (
+                  <span className="text-blue-400 text-xs font-medium block mb-1">Topic: {activeRegion.topic}</span>
+                )}
+                <span className="text-slate-400 text-xs flex items-center gap-1.5 mt-1">
                   <span className="material-symbols-outlined text-[14px]">calendar_today</span>
                   {activeRegion.date}
                 </span>
@@ -152,15 +148,15 @@ export default function TeacherMap({ data = DEFAULT_EVENT_DATA }: TeacherMapProp
               <div className="bg-slate-800 p-3 rounded-lg text-center border border-slate-700">
                 {activeRegion.status === "active" ? (
                   <div className="flex gap-2 justify-center">
-                    <button onClick={() => handleAction('register')} className="bg-emerald-500 text-white border-none py-1.5 px-4 rounded-md cursor-pointer font-bold text-xs hover:bg-emerald-600 transition-colors">
+                    <button onClick={() => handleActionClick('register')} className="bg-emerald-500 text-white border-none py-1.5 px-4 rounded-md cursor-pointer font-bold text-xs hover:bg-emerald-600 transition-colors">
                       Register
                     </button>
-                    <button onClick={() => handleAction('decline')} className="bg-red-500 text-white border-none py-1.5 px-4 rounded-md cursor-pointer font-bold text-xs hover:bg-red-600 transition-colors">
+                    <button onClick={() => handleActionClick('decline')} className="bg-red-500 text-white border-none py-1.5 px-4 rounded-md cursor-pointer font-bold text-xs hover:bg-red-600 transition-colors">
                       Decline
                     </button>
                   </div>
                 ) : (
-                  <button onClick={() => handleAction('request')} className="bg-blue-500 text-white border-none py-1.5 px-4 rounded-md cursor-pointer font-bold text-xs w-full hover:bg-blue-600 transition-colors">
+                  <button onClick={() => handleActionClick('request')} className="bg-blue-500 text-white border-none py-1.5 px-4 rounded-md cursor-pointer font-bold text-xs w-full hover:bg-blue-600 transition-colors">
                     Request Training
                   </button>
                 )}
