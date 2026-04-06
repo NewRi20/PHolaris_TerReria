@@ -1,16 +1,10 @@
-import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ShieldCheck, TrendingUp } from 'lucide-react'
+import { useOnboard } from '@/hooks/useOnboard'
 
 export default function Step3Workload() {
   const navigate = useNavigate()
-  const [form, setForm] = useState({
-    yearsOfExperience: '',
-    numberOfClasses: '',
-    studentsPerClass: '',
-    workingHours: 40,
-    isGIDA: false,
-  })
+  const { onboardingData, updateOnboardingData, saveOnboardingFields, isSaving } = useOnboard()
 
   const getWorkloadLabel = (hours: number) => {
     if (hours < 30) return { label: 'Part-time', color: '#115cb9' }
@@ -18,7 +12,21 @@ export default function Step3Workload() {
     return { label: 'Overtime', color: '#d95e00' }
   }
 
-  const workload = getWorkloadLabel(form.workingHours)
+  const workload = getWorkloadLabel(onboardingData.working_hours_per_week)
+
+  const handleContinue = async () => {
+    const studentsPerClass = onboardingData.students_per_class.length > 0
+      ? onboardingData.students_per_class
+      : []
+
+    await saveOnboardingFields({
+      years_experience: onboardingData.years_experience,
+      num_classes: onboardingData.num_classes,
+      students_per_class: studentsPerClass,
+      working_hours_per_week: onboardingData.working_hours_per_week,
+    })
+    navigate('/onboarding/4')
+  }
 
   return (
     <div className="space-y-6">
@@ -64,8 +72,8 @@ export default function Step3Workload() {
                 min={0}
                 max={60}
                 placeholder="0"
-                value={form.yearsOfExperience}
-                onChange={(e) => setForm({ ...form, yearsOfExperience: e.target.value })}
+                  value={onboardingData.years_experience || ''}
+                  onChange={(e) => updateOnboardingData({ years_experience: Number(e.target.value) || 0 })}
                 className="w-full px-4 py-2.5 pr-16 rounded-xl bg-[#f9f9fd] text-[#1a1c1e] placeholder:text-[#44474e]/30 text-sm outline-none focus:ring-2 focus:ring-[#115cb9]/25 transition-all"
                 style={{ fontFamily: 'Inter, sans-serif' }}
               />
@@ -91,8 +99,8 @@ export default function Step3Workload() {
                 type="number"
                 min={0}
                 placeholder="0"
-                value={form.numberOfClasses}
-                onChange={(e) => setForm({ ...form, numberOfClasses: e.target.value })}
+                  value={onboardingData.num_classes || ''}
+                  onChange={(e) => updateOnboardingData({ num_classes: Number(e.target.value) || 0 })}
                 className="w-full px-4 py-2.5 rounded-xl bg-[#f9f9fd] text-[#1a1c1e] placeholder:text-[#44474e]/30 text-sm outline-none focus:ring-2 focus:ring-[#115cb9]/25 transition-all"
                 style={{ fontFamily: 'Inter, sans-serif' }}
               />
@@ -112,8 +120,8 @@ export default function Step3Workload() {
                 type="number"
                 min={0}
                 placeholder="0"
-                value={form.studentsPerClass}
-                onChange={(e) => setForm({ ...form, studentsPerClass: e.target.value })}
+                  value={onboardingData.students_per_class[0] || ''}
+                  onChange={(e) => updateOnboardingData({ students_per_class: e.target.value ? [Number(e.target.value)] : [] })}
                 className="w-full px-4 py-2.5 rounded-xl bg-[#f9f9fd] text-[#1a1c1e] placeholder:text-[#44474e]/30 text-sm outline-none focus:ring-2 focus:ring-[#115cb9]/25 transition-all"
                 style={{ fontFamily: 'Inter, sans-serif' }}
               />
@@ -134,7 +142,7 @@ export default function Step3Workload() {
                   className="text-2xl font-bold"
                   style={{ fontFamily: 'Manrope, sans-serif', color: workload.color }}
                 >
-                  {form.workingHours}
+                  {onboardingData.working_hours_per_week}
                 </span>
                 <span className="text-xs text-[#44474e]/50" style={{ fontFamily: 'Inter, sans-serif' }}>Hrs/Week</span>
               </div>
@@ -145,11 +153,11 @@ export default function Step3Workload() {
                 type="range"
                 min={10}
                 max={80}
-                value={form.workingHours}
-                onChange={(e) => setForm({ ...form, workingHours: Number(e.target.value) })}
+                  value={onboardingData.working_hours_per_week}
+                  onChange={(e) => updateOnboardingData({ working_hours_per_week: Number(e.target.value) })}
                 className="w-full h-2 rounded-full appearance-none cursor-pointer"
                 style={{
-                  background: `linear-gradient(to right, #001e40 0%, #115cb9 ${((form.workingHours - 10) / 70) * 100}%, #e1e1e7 ${((form.workingHours - 10) / 70) * 100}%, #e1e1e7 100%)`,
+                  background: `linear-gradient(to right, #001e40 0%, #115cb9 ${((onboardingData.working_hours_per_week - 10) / 70) * 100}%, #e1e1e7 ${((onboardingData.working_hours_per_week - 10) / 70) * 100}%, #e1e1e7 100%)`,
                   accentColor: '#001e40',
                 }}
               />
@@ -183,11 +191,12 @@ export default function Step3Workload() {
           </button>
 
           <button
-            onClick={() => navigate('/onboarding/4')}
+            onClick={handleContinue}
+            disabled={isSaving}
             className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#001e40] to-[#1a3a5c] text-white text-sm font-semibold hover:shadow-[0_4px_20px_rgba(0,30,64,0.25)] active:scale-[0.99] transition-all"
             style={{ fontFamily: 'Manrope, sans-serif' }}
           >
-            Continue
+            {isSaving ? 'Saving...' : 'Continue'}
             <svg className="w-4 h-4" fill="none" viewBox="0 0 16 16">
               <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
