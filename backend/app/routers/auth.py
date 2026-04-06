@@ -9,6 +9,7 @@ from app.core.security import hash_password, verify_password, create_access_toke
 from app.core.dependencies import get_current_user
 from app.core.rate_limiter import RATE_LIMITS, limiter
 from app.services.analytics_cache import mark_analytics_cache_stale
+from app.services.onboarding import is_teacher_profile_complete
 from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest, UserResponse
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -92,8 +93,21 @@ async def refresh(request: Request, body: RefreshRequest, db: AsyncSession = Dep
 
 
 @router.get("/me", response_model=UserResponse)
-async def me(user: User = Depends(get_current_user)):
-    return user
+async def me(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    onboarding_complete = True
+    if user.role == "teacher":
+        profile_result = await db.execute(select(TeacherProfile).where(TeacherProfile.user_id == user.id))
+        profile = profile_result.scalar_one_or_none()
+        onboarding_complete = is_teacher_profile_complete(profile)
+
+    return UserResponse(
+        id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        role=user.role,
+        is_active=user.is_active,
+        onboarding_complete=onboarding_complete,
+    )
 
 
 def _issue_tokens(user: User) -> TokenResponse:

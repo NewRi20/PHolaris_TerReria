@@ -17,6 +17,10 @@ export function PublicOnlyRoute() {
   }
 
   if (isAuthenticated) {
+    if (user?.role === 'teacher' && !user.onboarding_complete) {
+      return <Navigate to="/onboarding/1" replace />;
+    }
+
     return <Navigate to={getDefaultAppPath(user?.role)} replace />;
   }
 
@@ -24,7 +28,7 @@ export function PublicOnlyRoute() {
 }
 
 export function ProtectedRoute() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   const location = useLocation();
 
   if (isLoading) {
@@ -33,6 +37,17 @@ export function ProtectedRoute() {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+
+  const isOnboardingRoute = location.pathname.startsWith('/onboarding');
+  const needsOnboarding = user?.role === 'teacher' && !user.onboarding_complete;
+
+  if (needsOnboarding && !isOnboardingRoute) {
+    return <Navigate to="/onboarding/1" replace />;
+  }
+
+  if (!needsOnboarding && isOnboardingRoute) {
+    return <Navigate to={getDefaultAppPath(user?.role)} replace />;
   }
 
   return <Outlet />;
@@ -47,6 +62,10 @@ export function AppHomeRedirect() {
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (user.role === 'teacher' && !user.onboarding_complete) {
+    return <Navigate to="/onboarding/1" replace />;
   }
 
   return <Navigate to={getDefaultAppPath(user.role)} replace />;
