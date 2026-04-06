@@ -541,10 +541,28 @@ export default function TeacherProfile() {
                       onChange={(e) => setEditDraft({...editDraft, specialization: e.target.value})}
                       className="w-full bg-white border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary p-3 outline-none transition-all"
                     >
-                      <option value="Physics">Physics</option>
-                      <option value="Chemistry">Chemistry</option>
+                      <option value="All Subjects">All Subjects</option>
+                      
+                      {/* Core / General Science & Math */}
+                      <option disabled className="bg-slate-100 font-bold text-slate-500">Core Subjects</option>
                       <option value="General Science">General Science</option>
-                      <option value="Mathematics">Mathematics</option>
+                      <option value="Earth Science">Earth Science</option>
+                      <option value="Earth and Life Science">Earth and Life Science</option>
+                      <option value="Disaster Readiness and Risk Reduction">Disaster Readiness & Risk Reduction</option>
+                      <option value="General Mathematics">General Mathematics</option>
+                      <option value="Statistics and Probability">Statistics and Probability</option>
+                      
+                      {/* Specialized STEM Subjects */}
+                      <option disabled className="bg-slate-100 font-bold text-slate-500 mt-2">Specialized STEM</option>
+                      <option value="Pre-Calculus">Pre-Calculus</option>
+                      <option value="Basic Calculus">Basic Calculus</option>
+                      <option value="General Biology">General Biology</option>
+                      <option value="General Chemistry">General Chemistry</option>
+                      <option value="General Physics">General Physics</option>
+                      
+                      {/* Technology & Applied Subjects */}
+                      <option disabled className="bg-slate-100 font-bold text-slate-500 mt-2">Applied Tech / Robotics</option>
+                      <option value="Empowerment Technologies">Empowerment Technologies</option>
                       <option value="STEM Robotics">STEM Robotics</option>
                     </select>
                   </div>
