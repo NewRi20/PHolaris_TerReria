@@ -34,7 +34,7 @@ interface DetailedRegion {
 }
 
 export default function AdminDashboard() {
-  // --- STATE (Initialized empty/default for backend) ---
+  // --- CORE DATA STATE ---
   const [priorityData, setPriorityData] = useState<PriorityItem[]>([]);
   const [heatmapData, setHeatmapData] = useState<HeatmapRegion[]>([]); 
   const [detailedRegions, setDetailedRegions] = useState<DetailedRegion[]>([]);
@@ -44,37 +44,82 @@ export default function AdminDashboard() {
     experienceVoid: { value: 0, status: "-" }
   });
   
+  // --- UI & FUNCTIONAL STATES ---
   const [loading, setLoading] = useState(true);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+  
+  // Filter & Sort States
+  const [prioritySort, setPrioritySort] = useState<'desc' | 'asc'>('desc');
+  const [regionFilter, setRegionFilter] = useState<'all' | 'high_priority'>('all');
 
-  /* // TODO: Uncomment when ready to connect to backend
+  // --- ACTUAL BACKEND FETCH LOGIC ---
   useEffect(() => {
     async function loadDashboardData() {
       setLoading(true);
       try {
-        const data = await api.getDashboardMetrics();
+        // REPLACE '/api/admin/dashboard' WITH YOUR ACTUAL ENDPOINT
+        const response = await fetch('/api/admin/dashboard'); 
+        if (!response.ok) throw new Error('Failed to fetch dashboard data');
+        
+        const data = await response.json();
+
         setPriorityData(data.priorityRanks || []);
-        setMetrics(data.metrics || metrics);
+        setMetrics(data.metrics || {
+          outOfField: { value: 0, trend: "-" },
+          trainingDrought: { value: 0, status: "-" },
+          experienceVoid: { value: 0, status: "-" }
+        });
         setDetailedRegions(data.detailedRegions || []);
         setHeatmapData(data.heatmapData || []); 
+        
+        // Update the Last Sync Time when data successfully arrives
+        setLastSyncTime(new Date());
+
       } catch (error) {
-        console.error("Failed to fetch dashboard data", error);
+        console.error("Dashboard API Error:", error);
       } finally {
         setLoading(false);
       }
     }
+    
     loadDashboardData();
-  }, []);
-  */
-
-  // TEMPORARY: Simulates an API call so you can see the loading state.
-  // Remove this once your backend is connected above.
-  useEffect(() => {
-    setTimeout(() => setLoading(false), 1000);
+    
+    // Auto-refresh data every 5 minutes (300,000 ms) to keep the dashboard live
+    const interval = setInterval(loadDashboardData, 300000);
+    return () => clearInterval(interval);
   }, []);
 
-  if (loading) {
+  // --- DERIVED LOGIC & FILTERS ---
+
+  // 1. Dynamic Header Badge
+  const needsCriticalAnalysis = priorityData.some(p => p.isCritical) || metrics.trainingDrought.value > 10;
+
+  // 2. Priority Rank Sorter
+  const togglePrioritySort = () => {
+    setPrioritySort(prev => prev === 'desc' ? 'asc' : 'desc');
+  };
+
+  const sortedPriorityData = [...priorityData].sort((a, b) => {
+    return prioritySort === 'desc' ? b.score - a.score : a.score - b.score;
+  });
+
+  // 3. Detailed Regions Filter
+  const filteredDetailedRegions = detailedRegions.filter(region => {
+    if (regionFilter === 'all') return true;
+    // Assumes rank 1 represents 'High Priority'. Adjust based on your DB logic.
+    if (regionFilter === 'high_priority') return region.rank === 1; 
+    return true;
+  });
+
+  // Helper for formatting the sync time
+  const formatTime = (date: Date | null) => {
+    if (!date) return "Syncing...";
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  };
+
+  if (loading && !lastSyncTime) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center text-primary">
+      <div className="flex h-screen flex-col items-center justify-center text-primary bg-slate-50/50">
         <span className="material-symbols-outlined text-4xl mb-4 animate-spin">refresh</span>
         <div className="font-bold tracking-widest uppercase text-sm">Loading Dashboard Analytics...</div>
       </div>
@@ -82,14 +127,20 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-8">
+    <div className="p-8 max-w-[1600px] mx-auto w-full space-y-8 relative">
       {/* Page Header */}
-      <div className="flex flex-col md:flex-row justify-between items-end gap-6 mb-12">
+      <div className="flex flex-col md:flex-row justify-between items-end gap-6">
         <div className="max-w-2xl">
           <div className="flex items-center gap-2 mb-2">
-            <span className="px-2 py-0.5 bg-error-container text-on-error-container text-[10px] font-bold rounded-full uppercase tracking-wider shadow-sm">
-              Critical Analysis Required
-            </span>
+            {needsCriticalAnalysis ? (
+              <span className="px-2 py-0.5 bg-error-container text-on-error-container text-[10px] font-bold rounded-full uppercase tracking-wider shadow-sm transition-all">
+                Critical Analysis Required
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-full uppercase tracking-wider shadow-sm transition-all">
+                System Stable
+              </span>
+            )}
           </div>
           <h2 className="text-4xl font-extrabold text-primary tracking-tight mb-4 font-headline">Admin Dashboard</h2>
           <p className="text-slate-500 leading-relaxed">
@@ -97,10 +148,15 @@ export default function AdminDashboard() {
           </p>
         </div>
         <div className="flex gap-3">
-          <div className="bg-surface-container-lowest px-4 py-3 rounded-xl border border-slate-200 shadow-sm">
+          <div className="bg-surface-container-lowest px-4 py-3 rounded-xl border border-slate-200 shadow-sm flex flex-col items-end">
             <span className="block text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-1">Last Data Sync</span>
             <span className="text-primary font-headline font-bold flex items-center gap-2">
-              Just now <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              {formatTime(lastSyncTime)} 
+              {loading ? (
+                <span className="material-symbols-outlined text-[14px] animate-spin text-blue-500">refresh</span>
+              ) : (
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_5px_rgba(16,185,129,0.5)]"></span>
+              )}
             </span>
           </div>
         </div>
@@ -113,20 +169,26 @@ export default function AdminDashboard() {
         <div className="col-span-12 lg:col-span-4 bg-white rounded-xl p-6 shadow-sm border border-slate-100 flex flex-col">
           <div className="flex items-center justify-between mb-6">
             <h3 className="font-headline font-bold text-lg text-primary">Priority Rank</h3>
-            <button className="text-slate-400 hover:text-primary transition-colors p-1.5 rounded-lg hover:bg-slate-100 border border-transparent hover:border-slate-200">
-              <span className="material-symbols-outlined text-sm">filter_list</span>
+            <button 
+              onClick={togglePrioritySort}
+              title={`Sort ${prioritySort === 'desc' ? 'Ascending' : 'Descending'}`}
+              className="text-slate-400 hover:text-primary transition-colors p-1.5 rounded-lg hover:bg-slate-100 border border-transparent hover:border-slate-200 flex items-center"
+            >
+              <span className="material-symbols-outlined text-sm">
+                {prioritySort === 'desc' ? 'arrow_downward' : 'arrow_upward'}
+              </span>
             </button>
           </div>
           
           <div className="space-y-4 flex-1">
-            {priorityData.length > 0 ? (
-              priorityData.map((item, index) => (
+            {sortedPriorityData.length > 0 ? (
+              sortedPriorityData.map((item, index) => (
                 <div 
                   key={index} 
                   className={`flex items-center gap-4 p-4 rounded-xl border transition-all cursor-pointer hover:-translate-y-0.5 hover:shadow-sm ${item.isCritical ? 'bg-red-50/50 border-error border-l-4 rounded-l-none' : 'bg-slate-50 border-slate-100 hover:bg-white hover:border-slate-300'}`}
                 >
                   <span className={`text-2xl font-black italic ${item.isCritical ? 'text-error opacity-40' : 'text-slate-300'}`}>
-                    {item.rank}
+                    {index + 1 < 10 ? `0${index + 1}` : index + 1}
                   </span>
                   <div className="flex-1">
                     <p className="font-bold text-primary">{item.province}</p>
@@ -200,10 +262,6 @@ export default function AdminDashboard() {
                 )}
               </div>
             </div>
-
-            <button className="absolute top-4 right-4 bg-black/20 backdrop-blur-md p-2 rounded-lg text-white hover:bg-black/40 transition-colors z-20 border border-white/10 shadow-sm">
-              <span className="material-symbols-outlined">fullscreen</span>
-            </button>
           </div>
 
           {/* Highlights: Metrics Row */}
@@ -264,17 +322,31 @@ export default function AdminDashboard() {
             <div className="p-6 flex justify-between items-center bg-slate-50/80 border-b border-slate-200">
               <h3 className="font-headline font-bold text-lg text-primary">Detailed Capacity-Gapped Regions</h3>
               <div className="flex items-center gap-2">
-                <button className="px-4 py-2 text-xs font-bold bg-white rounded-lg shadow-sm border border-slate-200 text-primary hover:bg-slate-50 transition-colors">
+                <button 
+                  onClick={() => setRegionFilter('all')}
+                  className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors border ${
+                    regionFilter === 'all' 
+                      ? 'bg-white shadow-sm border-slate-200 text-primary' 
+                      : 'text-slate-500 hover:text-primary hover:bg-slate-100 border-transparent'
+                  }`}
+                >
                   All Regions
                 </button>
-                <button className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-primary hover:bg-slate-100 rounded-lg transition-colors border border-transparent">
+                <button 
+                  onClick={() => setRegionFilter('high_priority')}
+                  className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors border ${
+                    regionFilter === 'high_priority' 
+                      ? 'bg-white shadow-sm border-slate-200 text-primary' 
+                      : 'text-slate-500 hover:text-primary hover:bg-slate-100 border-transparent'
+                  }`}
+                >
                   High Priority
                 </button>
               </div>
             </div>
             
             <div className="overflow-x-auto">
-              {detailedRegions.length > 0 ? (
+              {filteredDetailedRegions.length > 0 ? (
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="text-[10px] text-slate-500 font-bold uppercase tracking-widest border-b border-slate-200 bg-white">
@@ -286,7 +358,7 @@ export default function AdminDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {detailedRegions.map((region, idx) => (
+                    {filteredDetailedRegions.map((region, idx) => (
                       <tr key={idx} className="hover:bg-slate-50/80 transition-colors bg-white">
                         <td className="px-8 py-6">
                           <p className="font-bold text-primary">{region.city}</p>
@@ -319,7 +391,7 @@ export default function AdminDashboard() {
               ) : (
                 <div className="flex flex-col items-center justify-center py-12 text-slate-400 bg-slate-50/50">
                   <span className="material-symbols-outlined text-3xl mb-2">table_rows</span>
-                  <span className="text-xs font-bold">Awaiting regional data...</span>
+                  <span className="text-xs font-bold">No regions match the current filter.</span>
                 </div>
               )}
             </div>

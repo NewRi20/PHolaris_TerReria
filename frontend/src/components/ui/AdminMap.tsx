@@ -1,34 +1,31 @@
 import { MapContainer, TileLayer, GeoJSON } from 'react-leaflet';
 import phRegionsData from "../../assets/regions.json";
 
-// Define the shape of your backend data
+/**
+ * ============================================================================
+ * BACKEND INTEGRATION GUIDE FOR ROUTING / API TEAM:
+ * ============================================================================
+ * * This map component expects an array of objects matching the `RegionRiskData` 
+ * interface below. It is completely decoupled from the API fetching logic.
+ * * To populate this map:
+ * 1. In the parent component (e.g., UnderservedAreas.tsx), fetch the risk data 
+ * from your endpoint (e.g., GET /api/regions/risk-analysis).
+ * 2. Ensure your backend JSON response matches the `RegionRiskData[]` array format.
+ * 3. Pass that array into this component as a prop: `<AdminMap data={backendData} />`
+ * * The map will automatically re-render and color-code the regions based on the 
+ * `flags` integer (0 = Safe/Green, 5 = Critical/Red).
+ */
+
 export interface RegionRiskData {
+  /** The exact name of the region (e.g., "NCR", "CALABARZON", "Ilocos") */
   name: string;
+  /** Integer from 0 to 5 indicating severity. Determines the map color. */
   flags: number;
+  /** A short string detailing what the region needs (e.g., "Urgent Capacity Building") */
   needs: string;
 }
 
-// Keep mock data as the default fallback
-const DEFAULT_MOCK_DATA: RegionRiskData[] = [
-  { name: "National Capital Region", flags: 1, needs: "Standard Upskilling" },
-  { name: "Ilocos", flags: 5, needs: "Urgent Capacity Building" },
-  { name: "Cagayan Valley", flags: 2, needs: "Resources" },
-  { name: "Central Luzon", flags: 3, needs: "Tech Support" },
-  { name: "Bicol", flags: 3, needs: "Physics Mastery" },
-  { name: "Western Visayas", flags: 2, needs: "Training" },
-  { name: "Central Visayas", flags: 1, needs: "None" },
-  { name: "Eastern Visayas", flags: 4, needs: "GIDA Outreach" },
-  { name: "Zamboanga Peninsula", flags: 3, needs: "Infrastructure" },
-  { name: "Northern Mindanao", flags: 2, needs: "Workshops" },
-  { name: "Davao", flags: 3, needs: "Grants" },
-  { name: "Soccsksargen", flags: 4, needs: "Urgent Support" },
-  { name: "Caraga", flags: 3, needs: "Capacity Building" },
-  { name: "Autonomous Region in Muslim Mindanao", flags: 5, needs: "Critical Support" },
-  { name: "Cordillera Administrative Region", flags: 1, needs: "None" },
-  { name: "CALABARZON", flags: 4, needs: "Math Seminars" },
-  { name: "MIMAROPA", flags: 2, needs: "GIDA Outreach" }
-];
-
+// Internal mapping to standardize raw GeoJSON province names into official regional buckets
 const provinceToRegion: Record<string, string> = {
   "Ilocos Norte": "Ilocos", "Ilocos Sur": "Ilocos", "La Union": "Ilocos", "Pangasinan": "Ilocos",
   "Batanes": "Cagayan Valley", "Cagayan": "Cagayan Valley", "Isabela": "Cagayan Valley", "Nueva Vizcaya": "Cagayan Valley", "Quirino": "Cagayan Valley",
@@ -49,26 +46,26 @@ const provinceToRegion: Record<string, string> = {
   "City of Manila": "National Capital Region", "NCR": "National Capital Region", "Metropolitan Manila": "National Capital Region"
 };
 
-// Make the component accept props
 interface AdminMapProps {
   data?: RegionRiskData[];
 }
 
-export default function AdminMap({ data = DEFAULT_MOCK_DATA }: AdminMapProps) {
+// Defaults to an empty array. If the backend sends nothing, the map defaults to 0 flags (Safe/Green).
+export default function AdminMap({ data = [] }: AdminMapProps) {
   
   const getRegionColor = (flags: number) => {
-    if (flags >= 5) return '#ef4444'; 
-    if (flags === 4) return '#f97316'; 
-    if (flags === 3) return '#eab308'; 
-    if (flags === 2) return '#3b82f6'; 
-    return '#22c55e';                  
+    if (flags >= 5) return '#ef4444'; // Critical (Red)
+    if (flags === 4) return '#f97316'; // High Risk (Orange)
+    if (flags === 3) return '#eab308'; // Warning (Yellow)
+    if (flags === 2) return '#3b82f6'; // Minimal Action (Blue)
+    return '#22c55e';                  // Safe (Green) - Default state
   };
 
   const resolveRegionData = (properties: any) => {
     const rawJsonString = properties.adm1_en || properties.NAME_1 || properties.REGION || properties.adm2_en || properties.name || "";
     const mappedRegion = provinceToRegion[rawJsonString] || rawJsonString;
     
-    // Look up the matching data from the injected 'data' prop
+    // Look up the matching data from the injected 'data' prop from the backend
     const matched = data.find(d => {
       const safeJson = mappedRegion.toUpperCase();
       const safeMock = d.name.toUpperCase();
@@ -77,8 +74,8 @@ export default function AdminMap({ data = DEFAULT_MOCK_DATA }: AdminMapProps) {
 
     return {
       regionName: matched ? matched.name : mappedRegion,
-      flags: matched ? matched.flags : 0,
-      needs: matched ? matched.needs : "No data",
+      flags: matched ? matched.flags : 0, // Defaults to 0 flags if backend hasn't flagged it
+      needs: matched ? matched.needs : "No immediate action required.",
       rawName: rawJsonString 
     };
   };

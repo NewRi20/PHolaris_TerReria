@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import AdminMap from './ui/AdminMap'; // Make sure this path matches your folder structure!
+import { useState, useEffect } from 'react';
+import AdminMap, { type RegionRiskData } from './ui/AdminMap'; 
 
 // --- TYPES (Ready for Backend Integration) ---
 interface StatsData {
@@ -34,40 +34,99 @@ export default function UnderservedAreas() {
     personnel: { value: "-", progress: 0 },
     shortage: { value: "-" }
   });
+  
   const [priorityQueue, setPriorityQueue] = useState<PriorityItem[]>([]);
+  const [fullRankings, setFullRankings] = useState<PriorityItem[]>([]); 
   const [predictions, setPredictions] = useState<PredictionItem[]>([]);
   
-  // Set to true by default so the loading screen shows until the API finishes
+  // THE FIX: Added state to catch the map risk data from the backend
+  const [mapData, setMapData] = useState<RegionRiskData[]>([]);
+  
+  // UI & Interactive States
   const [loading, setLoading] = useState(true); 
+  const [isRankingsModalOpen, setIsRankingsModalOpen] = useState(false);
+  const [toast, setToast] = useState({ visible: false, title: '', msg: '', type: 'info' });
 
-  /* // TODO: Uncomment when backend API is ready
+  // --- ACTUAL BACKEND FETCH LOGIC ---
   useEffect(() => {
     async function fetchUnderservedData() {
       setLoading(true);
       try {
-        const response = await api.getUnderservedAreas(); // Replace with your actual API call
-        setStats(response.stats);
-        setPriorityQueue(response.priorityQueue);
-        setPredictions(response.predictions);
+        const response = await fetch('/api/underserved-areas');
+        
+        if (!response.ok) throw new Error('Failed to fetch underserved areas data');
+        const data = await response.json();
+
+        setStats(data.stats || {
+          riskIndex: { value: "-", trend: "" },
+          personnel: { value: "-", progress: 0 },
+          shortage: { value: "-" }
+        });
+        
+        setPriorityQueue(data.priorityQueue || []);
+        setFullRankings(data.fullRankings || []);
+        setPredictions(data.predictions || []);
+        
+        // THE FIX: Capture the map data
+        setMapData(data.mapData || []);
+
       } catch (error) {
-        console.error("Error fetching underserved areas data:", error);
+        console.warn("API Error, using fallback layout.", error);
       } finally {
         setLoading(false);
       }
     }
+    
     fetchUnderservedData();
   }, []);
-  */
 
-  // TEMPORARY: Remove this useEffect once your backend API is connected above.
-  // This simulates an API call for 1 second so you can see the loading state, then loads empty data.
-  useEffect(() => {
-    setTimeout(() => setLoading(false), 1000);
-  }, []);
+  // --- ACTION HANDLERS ---
+
+  const showToast = (title: string, msg: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToast({ visible: true, title, msg, type });
+    setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 4000);
+  };
+
+  const handleDownloadReport = () => {
+    if (fullRankings.length === 0) {
+      showToast('Export Failed', 'No data available to export. Please wait for the backend sync.', 'error');
+      return;
+    }
+
+    showToast('Generating Report', 'Compiling geographic risk data into CSV...', 'info');
+
+    setTimeout(() => {
+      const csvRows = [];
+      csvRows.push(['Rank', 'Region/Division', 'Risk Score', 'Critical Status', 'Key Flags']);
+      
+      fullRankings.forEach(item => {
+        csvRows.push([
+          item.rank, 
+          `"${item.name}"`, 
+          item.score, 
+          item.isCritical ? 'CRITICAL' : 'MONITORING',
+          `"${item.labels.join(' | ')}"`
+        ]);
+      });
+
+      const csvString = csvRows.map(row => row.join(',')).join('\n');
+      const blob = new Blob([csvString], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Geographic_Risk_Report_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      showToast('Download Complete', 'Your report has been downloaded successfully.', 'success');
+    }, 1000);
+  };
 
   if (loading) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center text-primary">
+      <div className="flex h-screen flex-col items-center justify-center text-primary bg-slate-50/50">
         <span className="material-symbols-outlined text-4xl mb-4 animate-spin">refresh</span>
         <div className="font-bold tracking-widest uppercase text-sm">Loading Regional Data...</div>
       </div>
@@ -75,8 +134,16 @@ export default function UnderservedAreas() {
   }
 
   return (
-    <div className="p-8 max-w-[1600px] mx-auto w-full space-y-8">
+    <div className="p-8 max-w-[1600px] mx-auto w-full space-y-8 relative">
       
+      {/* --- HEADER SECTION --- */}
+      <section className="mb-8">
+        <h1 className="text-4xl font-extrabold text-primary font-headline tracking-tight">Underserved Areas Map</h1>
+        <p className="text-slate-500 mt-3 max-w-3xl leading-relaxed">
+          Monitor regional disparities, analyze instructional risk indices, and visualize forecasting models to prioritize educational interventions across the Philippine archipelago. Data is synced in real-time from the educator database.
+        </p>
+      </section>
+
       {/* 1. Stats Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 transition-all hover:shadow-md">
@@ -119,9 +186,9 @@ export default function UnderservedAreas() {
             </div>
           </div>
           
-          {/* REFINED: Added explicit height and z-index to prevent Leaflet from collapsing or overlapping menus */}
           <div className="w-full min-h-[500px] bg-slate-100 relative z-0">
-            <AdminMap /> 
+            {/* THE FIX: mapData is now explicitly passed from the backend into the Map component */}
+            <AdminMap data={mapData} /> 
           </div>
         </div>
 
@@ -160,7 +227,6 @@ export default function UnderservedAreas() {
                     </div>
                   ))
                 ) : (
-                  // Fallback for empty queue
                   <div className="py-8 text-center border-2 border-dashed border-slate-200 rounded-xl bg-slate-50">
                     <span className="material-symbols-outlined text-slate-300 text-3xl mb-2">inbox</span>
                     <p className="text-xs font-bold text-slate-500">Awaiting queue data...</p>
@@ -168,9 +234,12 @@ export default function UnderservedAreas() {
                 )}
               </div>
 
-              {/* Refined Button Layout */}
+              {/* Button to Open Rankings Modal */}
               <div className="mt-auto pt-8">
-                <button className="w-full py-3.5 text-xs font-bold text-primary bg-primary/5 border border-primary/20 rounded-xl hover:bg-primary/10 hover:border-primary/40 transition-all uppercase tracking-widest focus:ring-4 focus:ring-primary/10">
+                <button 
+                  onClick={() => setIsRankingsModalOpen(true)}
+                  className="w-full py-3.5 text-xs font-bold text-primary bg-primary/5 border border-primary/20 rounded-xl hover:bg-primary/10 hover:border-primary/40 transition-all uppercase tracking-widest focus:ring-4 focus:ring-primary/10"
+                >
                     Full Risk Rankings
                 </button>
               </div>
@@ -239,10 +308,94 @@ export default function UnderservedAreas() {
 
       {/* 4. Footer Action */}
       <div className="pt-6 flex justify-end">
-        <button className="bg-slate-900 text-white font-bold px-8 py-3.5 rounded-xl hover:bg-slate-800 transition-all flex items-center gap-3 shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 focus:ring-4 focus:ring-slate-900/20">
+        <button 
+          onClick={handleDownloadReport}
+          className="bg-slate-900 text-white font-bold px-8 py-3.5 rounded-xl hover:bg-slate-800 transition-all flex items-center gap-3 shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0 focus:ring-4 focus:ring-slate-900/20"
+        >
           <span className="material-symbols-outlined">picture_as_pdf</span>
-          Download Executive Geographic Risk Report
+          Download Executive Geographic Risk Report (CSV)
         </button>
+      </div>
+
+      {/* --- MODALS & NOTIFICATIONS --- */}
+
+      {/* Full Risk Rankings Modal */}
+      {isRankingsModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            
+            <div className="px-6 py-5 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+              <div>
+                <h3 className="font-headline font-extrabold text-xl text-primary">Complete Geographic Risk Rankings</h3>
+                <p className="text-xs text-slate-500 mt-1">Aggregated scoring based on Out-of-Field and Training Drought indices.</p>
+              </div>
+              <button onClick={() => setIsRankingsModalOpen(false)} className="text-slate-400 hover:text-slate-700 transition-colors bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
+                <span className="material-symbols-outlined text-sm">close</span>
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto bg-slate-50/50">
+              {fullRankings.length > 0 ? (
+                <div className="space-y-3">
+                  {fullRankings.map((item, index) => (
+                    <div key={index} className={`flex items-center gap-5 p-4 rounded-xl border bg-white shadow-sm ${item.isCritical ? 'border-error/30 border-l-4 border-l-error' : 'border-slate-200'}`}>
+                      <div className={`text-2xl font-black italic w-8 text-center ${item.isCritical ? 'text-error' : 'text-slate-300'}`}>
+                        {item.rank}
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-base font-bold text-slate-900">{item.name}</h4>
+                        <div className="flex gap-2 mt-1.5 flex-wrap">
+                          {item.labels.map((label, idx) => (
+                            <span key={idx} className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full ${item.isCritical ? 'bg-error/10 text-error' : 'bg-slate-100 text-slate-500'}`}>
+                              {label}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className={`text-xl font-black ${item.isCritical ? 'text-error' : 'text-primary'}`}>{item.score}</div>
+                        <div className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Risk Score</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-12 flex flex-col items-center justify-center text-slate-400">
+                  <span className="material-symbols-outlined text-4xl mb-3 animate-spin">refresh</span>
+                  <p className="text-sm font-bold">Fetching complete rankings from backend...</p>
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-slate-200 bg-white flex justify-end">
+              <button 
+                onClick={() => setIsRankingsModalOpen(false)}
+                className="px-6 py-2.5 rounded-xl text-sm font-bold bg-primary text-white hover:bg-primary/90 transition-colors shadow-md"
+              >
+                Close Rankings
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* React Toast Notification System */}
+      <div className={`fixed bottom-8 right-8 z-[150] transition-all duration-500 ease-out ${toast.visible ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-10 opacity-0 scale-95 pointer-events-none'}`}>
+        <div className="bg-slate-900 text-white px-6 py-5 rounded-2xl shadow-2xl flex items-center gap-4 border border-slate-700">
+          <div className="h-10 w-10 rounded-full bg-slate-800 flex items-center justify-center border border-slate-700">
+            {toast.type === 'success' ? (
+               <span className="material-symbols-outlined text-green-400">check_circle</span>
+            ) : toast.type === 'error' ? (
+               <span className="material-symbols-outlined text-red-400">warning</span>
+            ) : (
+               <span className="material-symbols-outlined text-blue-400">info</span>
+            )}
+          </div>
+          <div>
+            <p className="text-sm font-bold tracking-wide">{toast.title}</p>
+            <p className="text-xs text-slate-400 mt-0.5 max-w-xs">{toast.msg}</p>
+          </div>
+        </div>
       </div>
 
     </div>
