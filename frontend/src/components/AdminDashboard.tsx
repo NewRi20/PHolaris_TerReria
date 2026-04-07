@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { api } from '../services/api';
 
 // --- TYPES (Strictly defined for Backend Integration) ---
 interface HeatmapRegion {
@@ -33,6 +34,51 @@ interface DetailedRegion {
   actionClass: string;
 }
 
+interface BackendDashboardResponse {
+  generated_at?: string;
+  total_regions?: number;
+  critical_regions?: number;
+  shortage_regions?: number;
+  top_uplift_priorities?: Array<{
+    region?: string;
+    priority_score?: number;
+    metrics_flagged_count?: number;
+    color_code?: string;
+    rank?: number;
+  }>;
+}
+
+interface BackendUnderservedResponse {
+  count?: number;
+  items?: Array<{
+    region?: string;
+    priority_score?: number;
+    metrics_flagged_count?: number;
+    color_code?: string;
+    rank?: number;
+  }>;
+}
+
+const getColorClass = (colorCode?: string) => {
+  if (colorCode === 'red') return 'bg-error';
+  if (colorCode === 'orange') return 'bg-amber-500';
+  if (colorCode === 'yellow') return 'bg-yellow-400';
+  return 'bg-sky-500';
+};
+
+const getActionStyle = (colorCode?: string) => {
+  if (colorCode === 'red') {
+    return { action: 'Immediate Intervention', actionClass: 'bg-error/10 text-error' };
+  }
+  if (colorCode === 'orange') {
+    return { action: 'High Priority', actionClass: 'bg-amber-100 text-amber-700' };
+  }
+  if (colorCode === 'yellow') {
+    return { action: 'Monitor Closely', actionClass: 'bg-yellow-100 text-yellow-700' };
+  }
+  return { action: 'Stable', actionClass: 'bg-sky-100 text-sky-700' };
+};
+
 export default function AdminDashboard() {
   // --- CORE DATA STATE ---
   const [priorityData, setPriorityData] = useState<PriorityItem[]>([]);
@@ -57,23 +103,88 @@ export default function AdminDashboard() {
     async function loadDashboardData() {
       setLoading(true);
       try {
-        // REPLACE '/api/admin/dashboard' WITH YOUR ACTUAL ENDPOINT
-        const response = await fetch('/api/admin/dashboard'); 
-        if (!response.ok) throw new Error('Failed to fetch dashboard data');
-        
-        const data = await response.json();
+        const [dashboardRaw, underservedRaw] = await Promise.all([
+          api.getAdminDashboard(),
+          api.getUnderservedAreas(),
+        ]);
 
-        setPriorityData(data.priorityRanks || []);
-        setMetrics(data.metrics || {
-          outOfField: { value: 0, trend: "-" },
-          trainingDrought: { value: 0, status: "-" },
-          experienceVoid: { value: 0, status: "-" }
+        if (dashboardRaw?.detail) {
+          throw new Error(typeof dashboardRaw.detail === 'string' ? dashboardRaw.detail : 'Failed to fetch dashboard data');
+        }
+
+        const dashboard = (dashboardRaw ?? {}) as BackendDashboardResponse;
+        const underserved = (underservedRaw ?? {}) as BackendUnderservedResponse;
+
+        const prioritiesSource = Array.isArray(dashboard.top_uplift_priorities)
+          ? dashboard.top_uplift_priorities
+          : [];
+
+        const priorities: PriorityItem[] = prioritiesSource.map((item, index) => {
+          const colorCode = item.color_code;
+          return {
+            province: item.region || 'Unknown Region',
+            region: item.region || 'Unknown Region',
+            score: Number(item.priority_score ?? 0),
+            rank: String(item.rank ?? index + 1).padStart(2, '0'),
+            isCritical: colorCode === 'red' || colorCode === 'orange',
+          };
         });
-        setDetailedRegions(data.detailedRegions || []);
-        setHeatmapData(data.heatmapData || []); 
+
+        const maxPriorityScore = Math.max(1, ...prioritiesSource.map((item) => Number(item.priority_score ?? 0)));
+        const heatmap: HeatmapRegion[] = prioritiesSource.slice(0, 5).map((item, index) => {
+          const score = Number(item.priority_score ?? 0);
+          return {
+            regionId: `${item.region || 'region'}-${index}`,
+            name: item.region || 'Unknown Region',
+            gap: `${score.toFixed(1)} pts`,
+            intensity: getColorClass(item.color_code),
+            percentage: `${Math.max(8, Math.round((score / maxPriorityScore) * 100))}%`,
+          };
+        });
+
+        const underservedItems = Array.isArray(underserved.items) ? underserved.items : prioritiesSource;
+        const detailed: DetailedRegion[] = underservedItems.map((item, index) => {
+          const { action, actionClass } = getActionStyle(item.color_code);
+          return {
+            city: item.region || 'Unknown Region',
+            location: 'Region',
+            shortage: `${Number(item.priority_score ?? 0).toFixed(1)} pts`,
+            misalignment: `${Number(item.metrics_flagged_count ?? 0)} flagged metrics`,
+            rank: Number(item.rank ?? index + 1),
+            action,
+            actionClass,
+          };
+        });
+
+        const totalRegions = Math.max(1, Number(dashboard.total_regions ?? 0));
+        const criticalRegions = Number(dashboard.critical_regions ?? 0);
+        const shortageRegions = Number(dashboard.shortage_regions ?? 0);
+        const avgFlagged = prioritiesSource.length
+          ? prioritiesSource.reduce((sum, item) => sum + Number(item.metrics_flagged_count ?? 0), 0) / prioritiesSource.length
+          : 0;
+
+        const nextMetrics: MetricsData = {
+          outOfField: {
+            value: Math.round((criticalRegions / totalRegions) * 100),
+            trend: criticalRegions > 0 ? `${criticalRegions} critical` : '-',
+          },
+          trainingDrought: {
+            value: Number(avgFlagged.toFixed(1)),
+            status: avgFlagged >= 3 ? 'Elevated' : avgFlagged > 0 ? 'Moderate' : '-',
+          },
+          experienceVoid: {
+            value: Math.round((shortageRegions / totalRegions) * 100),
+            status: shortageRegions > 0 ? `${shortageRegions} shortage regions` : '-',
+          },
+        };
+
+        setPriorityData(priorities);
+        setMetrics(nextMetrics);
+        setDetailedRegions(detailed);
+        setHeatmapData(heatmap);
         
         // Update the Last Sync Time when data successfully arrives
-        setLastSyncTime(new Date());
+        setLastSyncTime(dashboard.generated_at ? new Date(dashboard.generated_at) : new Date());
 
       } catch (error) {
         console.error("Dashboard API Error:", error);
