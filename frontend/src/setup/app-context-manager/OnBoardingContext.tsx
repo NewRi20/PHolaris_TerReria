@@ -2,10 +2,17 @@ import { createContext, useEffect, useState, type ReactNode } from "react";
 
 import { useAuth } from "../../hooks/useAuth";
 
+export type OnboardingTrainingCategory =
+    | "Subject Mastery"
+    | "Digital Literacy"
+    | "Soft Skills"
+    | "Pedagogy"
+    | "Other";
+
 export type OnboardingTrainingEntry = {
     id: string;
     title: string;
-    category: string;
+    category: OnboardingTrainingCategory;
     completionDate: string;
     status: "Valid" | "Expiring Soon" | "Expired";
     persisted: boolean;
@@ -43,6 +50,7 @@ type TeacherProfileApiResponse = {
         students_per_class: number[] | null;
         working_hours_per_week: number | null;
         last_training_date: string | null;
+        
         onboarding_complete: boolean;
     };
     trainings: Array<{
@@ -52,6 +60,10 @@ type TeacherProfileApiResponse = {
         date_attended: string | null;
     }>;
     full_name: string | null;
+};
+
+type TeacherProfileUpdateResponse = {
+    onboarding_complete: boolean;
 };
 
 interface OnboardingContextType {
@@ -118,6 +130,22 @@ const parseDateValue = (value: string | null | undefined) => {
     return value;
 };
 
+const normalizeTrainingCategory = (value: string | null | undefined): OnboardingTrainingCategory => {
+    if (value === "Subject Mastery") {
+        return "Subject Mastery";
+    }
+    if (value === "Digital Literacy") {
+        return "Digital Literacy";
+    }
+    if (value === "Soft Skills") {
+        return "Soft Skills";
+    }
+    if (value === "Pedagogy") {
+        return "Pedagogy";
+    }
+    return "Other";
+};
+
 export const OnboardingProvider = ({ children }: { children: ReactNode }) => {
     const { accessToken, user, setUser, isLoading: isAuthLoading } = useAuth();
     const [onboardingData, setOnboardingData] = useState<OnboardingData>(initialData);
@@ -152,6 +180,17 @@ export const OnboardingProvider = ({ children }: { children: ReactNode }) => {
         }
     };
 
+    const syncAuthOnboardingComplete = (isComplete: boolean) => {
+        if (!user || user.role !== "teacher") {
+            return;
+        }
+
+        setUser({
+            ...user,
+            onboarding_complete: isComplete,
+        });
+    };
+
     const hydrateFromBackend = async () => {
         try {
             if (!accessToken || user?.role !== "teacher") {
@@ -169,6 +208,7 @@ export const OnboardingProvider = ({ children }: { children: ReactNode }) => {
             }
 
             const payload = (await response.json()) as TeacherProfileApiResponse;
+            syncAuthOnboardingComplete(payload.profile.onboarding_complete);
             setOnboardingData({
                 teacherName: payload.full_name ?? "",
                 teacher_id_number: payload.profile.teacher_id_number ?? "",
@@ -189,7 +229,7 @@ export const OnboardingProvider = ({ children }: { children: ReactNode }) => {
                 payload.trainings.map((training) => ({
                     id: training.id,
                     title: training.training_name,
-                    category: training.training_type ?? "Other",
+                    category: normalizeTrainingCategory(training.training_type),
                     completionDate: training.date_attended ?? "",
                     status: getTrainingStatus(training.date_attended),
                     persisted: true,
@@ -233,25 +273,26 @@ export const OnboardingProvider = ({ children }: { children: ReactNode }) => {
 
         setIsSaving(true);
         try {
+            const nextData = { ...onboardingData, ...fields };
             updateOnboardingData(fields);
 
             const payload = {
-                teacher_id_number: fields.teacher_id_number,
-                school: fields.school,
-                region: fields.region,
-                province: fields.province,
-                grade_level_taught: fields.grade_level_taught,
-                current_subject: fields.current_subject,
-                specialization: fields.specialization,
-                teaching_outside_specialization: fields.teaching_outside_specialization,
-                years_experience: fields.years_experience,
-                num_classes: fields.num_classes,
-                students_per_class: fields.students_per_class,
-                working_hours_per_week: fields.working_hours_per_week,
-                last_training_date: fields.last_training_date,
+                teacher_id_number: nextData.teacher_id_number,
+                school: nextData.school,
+                region: nextData.region,
+                province: nextData.province,
+                grade_level_taught: nextData.grade_level_taught,
+                current_subject: nextData.current_subject,
+                specialization: nextData.specialization,
+                teaching_outside_specialization: nextData.teaching_outside_specialization,
+                years_experience: nextData.years_experience,
+                num_classes: nextData.num_classes,
+                students_per_class: nextData.students_per_class,
+                working_hours_per_week: nextData.working_hours_per_week,
+                last_training_date: nextData.last_training_date,
             };
 
-            const response = await fetch(`${API_BASE_URL}/api/teachers/me`, {
+            const response = await fetch(`${API_BASE_URL}/api/teachers/me/onboarding`, {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",
@@ -264,6 +305,9 @@ export const OnboardingProvider = ({ children }: { children: ReactNode }) => {
                 const payloadError = await response.json().catch(() => null);
                 throw new Error(payloadError?.detail || "Failed to save onboarding progress");
             }
+
+            const updatedProfile = (await response.json()) as TeacherProfileUpdateResponse;
+            syncAuthOnboardingComplete(updatedProfile.onboarding_complete);
 
             await refreshAuthUser();
         } finally {
@@ -307,6 +351,15 @@ export const OnboardingProvider = ({ children }: { children: ReactNode }) => {
                             : currentTraining,
                     ),
                 );
+            }
+
+            const profileResponse = await fetch(`${API_BASE_URL}/api/teachers/me`, {
+                headers: authHeaders ?? undefined,
+            });
+
+            if (profileResponse.ok) {
+                const profilePayload = (await profileResponse.json()) as TeacherProfileApiResponse;
+                syncAuthOnboardingComplete(profilePayload.profile.onboarding_complete);
             }
 
             await refreshAuthUser();

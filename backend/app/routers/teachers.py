@@ -14,6 +14,7 @@ from app.core.dependencies import get_current_user, require_admin
 from app.services.analytics_cache import mark_analytics_cache_stale
 from app.services.onboarding import is_teacher_profile_complete
 from app.schemas.teacher import (
+    TeacherOnboardingUpdate,
     TeacherProfileUpdate,
     TeacherProfileResponse,
     TeacherFullResponse,
@@ -50,6 +51,26 @@ async def update_my_profile(
 
     update_data = body.model_dump(exclude_unset=True)
     for key, value in update_data.items():
+        setattr(profile, key, value)
+
+    mark_analytics_cache_stale()
+    await db.flush()
+    return _build_profile_response(profile)
+
+
+@router.put("/me/onboarding", response_model=TeacherProfileResponse)
+async def save_my_onboarding(
+    body: TeacherOnboardingUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    profile = await _get_profile(db, user_id=user.id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Profile not found")
+
+    onboarding_data = body.model_dump(exclude_unset=True)
+
+    for key, value in onboarding_data.items():
         setattr(profile, key, value)
 
     mark_analytics_cache_stale()

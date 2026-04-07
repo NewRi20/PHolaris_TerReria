@@ -22,6 +22,10 @@ class TeacherProfileUpdate(BaseModel):
     last_training_date: Optional[date] = None
 
 
+class TeacherOnboardingUpdate(TeacherProfileUpdate):
+    pass
+
+
 class TeacherProfileResponse(BaseModel):
     id: UUID | str
     user_id: UUID | str
