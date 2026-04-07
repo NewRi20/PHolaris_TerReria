@@ -1,0 +1,15 @@
+.planning/
+.vscode
+
+# Agentic/AI workflow artifacts
+.context/
+.copilot/
+.cursor/
+.windsurf/
+.roo/
+.aider*
+
+# Local run outputs and transient state
+*.log
+*.tmp
+*.cache

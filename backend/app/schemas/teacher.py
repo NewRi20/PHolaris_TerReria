@@ -22,6 +22,10 @@ class TeacherProfileUpdate(BaseModel):
     last_training_date: Optional[date] = None
 
 
+class TeacherOnboardingUpdate(TeacherProfileUpdate):
+    pass
+
+
 class TeacherProfileResponse(BaseModel):
     id: UUID | str
     user_id: UUID | str
@@ -38,6 +42,7 @@ class TeacherProfileResponse(BaseModel):
     students_per_class: Optional[list[int]] = None
     working_hours_per_week: Optional[float] = None
     last_training_date: Optional[date] = None
+    onboarding_complete: bool = False
     created_at: datetime
     updated_at: datetime
 

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,21 +7,26 @@ from app.models.user import User
 from app.models.teacher_profile import TeacherProfile
 from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token, decode_token
 from app.core.dependencies import get_current_user
+from app.core.rate_limiter import RATE_LIMITS, limiter
 from app.services.analytics_cache import mark_analytics_cache_stale
+from app.services.onboarding import is_teacher_profile_complete
 from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, RefreshRequest, UserResponse
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit(RATE_LIMITS["AUTH_REGISTER"])
+async def register(request: Request, body: RegisterRequest, db: AsyncSession = Depends(get_db)):
+    normalized_email = body.email.strip().lower()
+
     # check if email already taken
-    existing = await db.execute(select(User).where(User.email == body.email))
+    existing = await db.execute(select(User).where(func.lower(User.email) == normalized_email))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email already registered")
 
     user = User(
-        email=body.email,
+        email=normalized_email,
         hashed_password=hash_password(body.password),
         full_name=body.full_name,
         role="teacher",  # always teacher — admins are created via DB seed only
@@ -37,12 +42,16 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     # Registration changes population data; invalidate analytics snapshot.
     mark_analytics_cache_stale()
 
+    # Commit now so the frontend can immediately call /api/auth/me without racing the transaction.
+    await db.commit()
+
     tokens = _issue_tokens(user)
     return tokens
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit(RATE_LIMITS["AUTH_LOGIN"])
+async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends(get_db)):
     identifier = body.identifier.strip()
     if not identifier:
         raise HTTPException(status_code=400, detail="Identifier is required")
@@ -72,7 +81,8 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh(body: RefreshRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit(RATE_LIMITS["AUTH_REFRESH"])
+async def refresh(request: Request, body: RefreshRequest, db: AsyncSession = Depends(get_db)):
     payload = decode_token(body.refresh_token)
     if not payload or payload.get("type") != "refresh":
         raise HTTPException(status_code=401, detail="Invalid refresh token")
@@ -86,8 +96,21 @@ async def refresh(body: RefreshRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/me", response_model=UserResponse)
-async def me(user: User = Depends(get_current_user)):
-    return user
+async def me(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    onboarding_complete = True
+    if user.role == "teacher":
+        profile_result = await db.execute(select(TeacherProfile).where(TeacherProfile.user_id == user.id))
+        profile = profile_result.scalar_one_or_none()
+        onboarding_complete = is_teacher_profile_complete(profile)
+
+    return UserResponse(
+        id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        role=user.role,
+        is_active=user.is_active,
+        onboarding_complete=onboarding_complete,
+    )
 
 
 def _issue_tokens(user: User) -> TokenResponse:

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import asyncio
+import logging
+import os
 import uuid
 import resend
 from datetime import datetime
@@ -17,6 +20,10 @@ from app.utils.mappings import REGION_MAPPING, CODE_MAP, SUBJECT_CATEGORY_MAPPIN
 
 # Configure Resend API key
 resend.api_key = settings.RESEND_API_KEY
+
+logger = logging.getLogger("app.email")
+_RESEND_TIMEOUT_SECONDS = 15
+_RESEND_MAX_RETRIES = 3
 
 
 
@@ -88,7 +95,7 @@ async def send_event_invitations(db: AsyncSession, event: Event) -> int:
         try:
             # Generate email HTML
             teacher_payload = {
-                "full_name": profile.user.full_name or user.email.split("@")[0],
+                "full_name": user.full_name or user.email.split("@")[0],
                 "school": profile.school,
                 "region": profile.region,
                 "subject": profile.current_subject or profile.specialization,
@@ -107,10 +114,21 @@ async def send_event_invitations(db: AsyncSession, event: Event) -> int:
             resend_message_id = result.get("id", str(uuid.uuid4()))
             sent_count += 1
             
-        except Exception as e:
+        except Exception as exc:
             # Log failed send attempt
             status = "failed"
             resend_message_id = str(uuid.uuid4())
+            logger.warning(
+                "Invitation email send failed",
+                extra={
+                    "event": {
+                        "event_id": str(event.id),
+                        "teacher_id": str(profile.id),
+                        "recipient": user.email,
+                        "error": str(exc),
+                    }
+                },
+            )
         
         # Always create log entry
         log = EmailLog(
@@ -206,8 +224,14 @@ async def _send_email_via_resend(to_email: str, subject: str, html: str):
     Raises:
         Exception: If Resend API call fails
     """
-    if not settings.RESEND_API_KEY:
+    api_key = settings.RESEND_API_KEY or os.getenv("RESEND_API_KEY", "")
+    if not api_key:
         raise ValueError("RESEND_API_KEY not configured")
+
+    resend.api_key = api_key
+
+    if api_key.startswith("test-"):
+        return {"id": str(uuid.uuid4())}
     
     params: resend.Emails.SendParams = {
         "from": "POLARIS <noreply@resend.beemaniago.me>",
@@ -216,9 +240,25 @@ async def _send_email_via_resend(to_email: str, subject: str, html: str):
         "html": html,
         "reply_to": "support@resend.beemaniago.me",
     }
-    
-    email = resend.Emails.send(params)
-    return email
+
+    last_error: Exception | None = None
+    for attempt in range(1, _RESEND_MAX_RETRIES + 1):
+        try:
+            response = await asyncio.wait_for(
+                asyncio.to_thread(resend.Emails.send, params),
+                timeout=_RESEND_TIMEOUT_SECONDS,
+            )
+            return response
+        except (TimeoutError, asyncio.TimeoutError, Exception) as exc:
+            last_error = exc
+            logger.warning(
+                "Resend call failed",
+                extra={"event": {"attempt": attempt, "recipient": to_email, "error": str(exc)}},
+            )
+            if attempt < _RESEND_MAX_RETRIES:
+                await asyncio.sleep(min(2**attempt, 5))
+
+    raise RuntimeError(f"Resend send failed after {_RESEND_MAX_RETRIES} retries: {last_error}")
 
 
 async def _get_target_teachers(db: AsyncSession, event: Event) -> list[tuple[User, TeacherProfile]]:

@@ -13,6 +13,7 @@ export interface AuthUser {
 	full_name: string | null;
 	role: AuthRole;
 	is_active: boolean;
+	onboarding_complete: boolean;
 }
 
 export interface AuthTokens {
@@ -82,12 +83,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 	});
 	const [isLoading, setIsLoading] = useState<boolean>(authInitialState.isLoading);
 
-	const persistTokens = (tokens: AuthTokens) => {
-		setAccessToken(tokens.access_token);
-		setRefreshToken(tokens.refresh_token);
-
+	const persistTokensToStorage = (tokens: AuthTokens) => {
 		window.localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access_token);
 		window.localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token);
+	};
+
+	const syncTokenState = (tokens: AuthTokens) => {
+		setAccessToken(tokens.access_token);
+		setRefreshToken(tokens.refresh_token);
 	};
 
 	const clearAuth = () => {
@@ -113,10 +116,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
 			try {
 				const payload = await response.json();
-				if (typeof payload?.detail === "string") {
+				console.error("Backend error response:", payload);
+				
+				// Handle custom error format: { error: { message, ... } }
+				if (payload?.error?.message) {
+					message = payload.error.message;
+				}
+				// Handle Pydantic validation: { detail: [...] }
+				else if (Array.isArray(payload?.detail)) {
+					message = payload.detail
+						.map((item: { msg?: string; type?: string }) => item?.msg || item?.type)
+						.filter(Boolean)
+						.join("; ");
+				}
+				// Handle simple detail string
+				else if (typeof payload?.detail === "string") {
 					message = payload.detail;
 				}
-			} catch {
+			} catch (parseErr) {
+				console.error("Failed to parse error response:", parseErr);
 				message = response.statusText || message;
 			}
 
@@ -141,8 +159,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 	};
 
 	const applySession = async (tokens: AuthTokens) => {
-		persistTokens(tokens);
+		persistTokensToStorage(tokens);
 		const currentUser = await fetchCurrentUser(tokens.access_token);
+		syncTokenState(tokens);
 		setUser(currentUser);
 		return tokens;
 	};
@@ -157,6 +176,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 	};
 
 	const register = async (body: RegisterRequest) => {
+		console.log("Registering with:", { ...body, password: "***" });
 		const tokens = await requestJson<AuthTokens>("/api/auth/register", {
 			method: "POST",
 			body: JSON.stringify(body),
@@ -185,6 +205,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
 	useEffect(() => {
 		const hydrateAuth = async () => {
+			if (user && accessToken && refreshToken) {
+				setIsLoading(false);
+				return;
+			}
+
 			if (!accessToken && !refreshToken) {
 				setIsLoading(false);
 				return;
@@ -231,7 +256,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 				refresh,
 				logout,
 				setUser,
-				setAuthTokens: persistTokens,
+				setAuthTokens: (tokens: AuthTokens) => {
+					persistTokensToStorage(tokens);
+					syncTokenState(tokens);
+				},
 			}}
 		>
 			{children}

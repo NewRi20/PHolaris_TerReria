@@ -1,15 +1,41 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager, suppress
+from typing import cast
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.requests import Request
 from sqlalchemy import text
 
 from app.config import settings
+from app.core.exceptions import (
+    StarException,
+    http_exception_handler,
+    star_exception_handler,
+    unhandled_exception_handler,
+    validation_exception_handler,
+)
+from app.core.logging import RequestContextLogMiddleware, setup_logging
+from app.core.rate_limiter import init_rate_limiter
 from app.database import async_session, get_db
 from app.routers import auth, teachers, events, analytics, maps, admin, ai
 from app.services.analytics_cache import get_analytics_snapshot, get_cache_meta
 from app.services.event_service import void_stale_events
+
+
+async def _typed_star_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    return await star_exception_handler(request, cast(StarException, exc))
+
+
+async def _typed_http_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    return await http_exception_handler(request, cast(HTTPException, exc))
+
+
+async def _typed_validation_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    return await validation_exception_handler(request, cast(RequestValidationError, exc))
 
 
 async def _analytics_auto_refresh_loop() -> None:
@@ -81,6 +107,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+setup_logging()
+app.add_middleware(RequestContextLogMiddleware)
+init_rate_limiter(app)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -88,6 +118,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_exception_handler(StarException, _typed_star_exception_handler)
+app.add_exception_handler(HTTPException, _typed_http_exception_handler)
+app.add_exception_handler(RequestValidationError, _typed_validation_exception_handler)
+app.add_exception_handler(Exception, unhandled_exception_handler)
 
 # Routers
 app.include_router(auth.router)
@@ -102,11 +137,13 @@ app.include_router(ai.router)
 @app.get("/health")
 async def health_check():
     """Quick check that the API and DB are alive."""
+    logger = logging.getLogger("app.health")
     try:
         async for db in get_db():
             await db.execute(text("SELECT 1"))
         db_status = "connected"
     except Exception as e:
+        logger.warning("Health check database ping failed", extra={"event": {"error": str(e)}})
         db_status = f"error: {e}"
 
     return {"status": "healthy", "database": db_status}

@@ -9,20 +9,25 @@ Built to support teacher profiling, regional analytics, event generation and app
 - `main.py` - FastAPI application entrypoint, middleware, lifespan, and router wiring
 - `config.py` - environment settings
 - `database.py` - async SQLAlchemy engine and session factory
+- `core/` - auth dependencies, security utilities, rate limiting, structured logging, and exception handlers
 - `models/` - ORM tables for users, teachers, trainings, badges, events, sentiments, and email logs
 - `schemas/` - request and response models
 - `routers/` - API endpoints
 - `services/` - analytics, caching, event lifecycle, and email helpers
-- `utils/` - CSV and Excel import parser
+- `utils/` - CSV/Excel import parser and pagination helpers
 
 ### Core Features
 
 - JWT authentication with teacher/admin roles
+- Route-level and default API rate limiting (SlowAPI)
+- Structured JSON request logging with request correlation IDs
+- Standardized API error envelope via custom exception handling
 - Teacher onboarding and profile updates
 - Training records with automatic badge awarding
 - Event lifecycle support: create, update, approve, vote, RSVP, sentiment, invitation sending, and voiding
 - Analytics engine for regional workforce and readiness insights
 - **AI-powered event generation** using Google Gemini: generates 5 recommendations based on regional metrics
+- **Fuzzy semantic deduplication** for AI recommendations against recent events to reduce near-duplicate proposals
 - **Personalized invitation drafting**: generates customized email invitations for matched teachers
 - **Sentiment scoring**: AI-based batch scoring of teacher feedback (-1.0 to 1.0 scale)
 - Map views for regions and upcoming events
@@ -44,6 +49,33 @@ Include the access token in the Authorization header:
 ```text
 Authorization: Bearer <access_token>
 ```
+
+Auth endpoints are rate limited:
+
+- `POST /auth/register` - `5/minute`
+- `POST /auth/login` - `10/minute`
+- `POST /auth/refresh` - `30/minute`
+
+When a rate limit is exceeded, API returns `429 Too Many Requests`.
+
+## Error and Logging Conventions
+
+- API errors follow a consistent envelope:
+
+```json
+{
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Human readable message",
+    "request_id": "<uuid-or-client-request-id>"
+  }
+}
+```
+
+- Validation failures include `error.details.issues`.
+- Unhandled server exceptions are sanitized for clients and logged server-side.
+- Request/response logging is structured JSON with `x-request-id` propagation for traceability.
+- The current implementation uses an internal JSON formatter in `core/logging.py` (not `structlog`).
 
 ## Environment Notes
 
@@ -342,8 +374,8 @@ Authorization: Bearer <access_token>
 
 - `region` - optional region filter
 - `subject` - optional current subject filter
-- `skip` - pagination offset (default: 0)
-- `limit` - pagination limit (default: 50)
+- `skip` - pagination offset (default: 0, clamped to `>= 0`)
+- `limit` - pagination limit (default: 50, clamped to `1..100`)
 
 **Response (200 OK):**
 
@@ -394,8 +426,8 @@ Same as `GET /teachers/me` response format above.
 - `status` - optional (draft, voting, approved, completed, voided)
 - `region` - optional region filter
 - `timeline` - optional (past, upcoming, all)
-- `skip` - pagination offset (default: 0)
-- `limit` - pagination limit (default: 50)
+- `skip` - pagination offset (default: 0, clamped to `>= 0`)
+- `limit` - pagination limit (default: 50, clamped to `1..100`)
 
 **Response (200 OK):**
 
@@ -687,8 +719,8 @@ Same structure as Get a specific event above.
 
 ### Generate AI Event Proposals
 
-**Endpoint:** `POST ai/generate-events`  
-**Description:** Analyze metrics and generate event recommendations using Gemini  
+**Endpoint:** `POST /ai/generate-events`  
+**Description:** Analyze metrics and generate event recommendations using Gemini with fuzzy deduplication against recent non-void events  
 **Authentication:** Admin
 
 **Response (200 OK):**
@@ -805,7 +837,7 @@ Same structure as Get a specific event above.
 
 ### Approve and Save Recommendations
 
-**Endpoint:** `POST ai/approve-events`  
+**Endpoint:** `POST /ai/approve-events`  
 **Description:** Approve selected cached recommendations and save them to database as draft events  
 **Authentication:** Admin
 
@@ -839,7 +871,7 @@ Same structure as Get a specific event above.
 
 ### Generate Personalized Invitations
 
-**Endpoint:** `POST ai/generate-invitations/{event_id}`  
+**Endpoint:** `POST /ai/generate-invitations/{event_id}`  
 **Description:** Draft customized invitation emails for teachers matching event criteria  
 **Authentication:** Admin
 
@@ -865,7 +897,7 @@ Same structure as Get a specific event above.
 
 ### Score Pending Sentiment Feedback
 
-**Endpoint:** `POST ai/score-pending-sentiments`  
+**Endpoint:** `POST /ai/score-pending-sentiments`  
 **Description:** Batch process and score all unscored event sentiment submissions using AI  
 **Authentication:** Admin
 
@@ -1211,7 +1243,9 @@ Same structure as Get a specific event above.
 
 - Analytics cache refresh is available through the admin refresh endpoint.
 - Scheduled job code remains in the project but should stay disabled unless the deployment plan supports it.
-- Semantic duplicate detection for AI-generated events is planned, but slug uniqueness is currently the enforced guardrail.
+- AI event generation includes fuzzy semantic deduplication against recent events before recommendations are returned.
+- Slug uniqueness is still enforced at save time as an additional guardrail.
+- Public list endpoints currently use offset pagination (`skip` + `limit`); cursor helper utilities exist for phased migration paths.
 - Imported teachers currently use a temporary password placeholder until a better onboarding flow is added.
 
 ## Getting Started

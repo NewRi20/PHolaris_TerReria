@@ -1,21 +1,97 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
+from difflib import SequenceMatcher
 from datetime import datetime, timedelta
+import asyncio
 
 from google import genai
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.models.event import Event
 from app.models.sentiment import EventSentiment
 
 
-# Initialize Gemini
-if settings.GEMINI_API_KEY:
-    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+logger = logging.getLogger("app.ai")
+
+_GEMINI_TIMEOUT_SECONDS = 20
+_GEMINI_MAX_RETRIES = 3
+
+client: genai.Client | None = genai.Client(api_key=settings.GEMINI_API_KEY) if settings.GEMINI_API_KEY else None
+
+
+def _get_client() -> genai.Client:
+    global client
+    if not settings.GEMINI_API_KEY:
+        raise ValueError("GEMINI_API_KEY not configured")
+    if client is None:
+        client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    return client
+
+
+async def _generate_content_with_retry(prompt: str) -> str:
+    client = _get_client()
+    last_error: Exception | None = None
+
+    for attempt in range(1, _GEMINI_MAX_RETRIES + 1):
+        try:
+            response = await asyncio.wait_for(
+                asyncio.to_thread(
+                    client.models.generate_content,
+                    model="gemini-2.5-flash-lite",
+                    contents=prompt,
+                ),
+                timeout=_GEMINI_TIMEOUT_SECONDS,
+            )
+
+            if not response or not response.text:
+                raise ValueError("Empty response from Gemini API")
+
+            return response.text.strip()
+        except (TimeoutError, asyncio.TimeoutError, ValueError) as exc:
+            last_error = exc
+            logger.warning(
+                "Gemini call failed",
+                extra={"event": {"attempt": attempt, "error": str(exc)}},
+            )
+            if attempt < _GEMINI_MAX_RETRIES:
+                await asyncio.sleep(min(2**attempt, 5))
+
+    raise ValueError(f"Gemini call failed after {_GEMINI_MAX_RETRIES} retries: {last_error}")
+
+
+def _parse_json_payload(raw_text: str) -> dict | list:
+    text = raw_text
+    if "```json" in text:
+        text = text.split("```json")[1].split("```")[0].strip()
+    elif "```" in text:
+        text = text.split("```")[1].split("```")[0].strip()
+    return json.loads(text)
+
+
+def _event_signature(event: dict) -> str:
+    title = (event.get("title") or "").lower().strip()
+    subject = (event.get("target_subject") or "").lower().strip()
+    regions = ",".join(sorted((event.get("target_regions") or [])))
+    return f"{title}|{subject}|{regions}".strip()
+
+
+def _is_fuzzy_duplicate(candidate: dict, existing_events: list[dict], threshold: float = 0.86) -> bool:
+    candidate_signature = _event_signature(candidate)
+    if not candidate_signature:
+        return False
+
+    for existing in existing_events:
+        existing_signature = _event_signature(existing)
+        if not existing_signature:
+            continue
+        similarity = SequenceMatcher(None, candidate_signature, existing_signature).ratio()
+        if similarity >= threshold:
+            return True
+    return False
 
 def build_event_generation_prompt(snapshot: dict, existing_events: list[dict]) -> str:
     """
@@ -50,14 +126,14 @@ def build_event_generation_prompt(snapshot: dict, existing_events: list[dict]) -
                 existing_regions_by_subject[region_key].add(region)
     
     critical_regions_str = "\n".join([
-        f"  - {item['region']}: readiness={item['regional_readiness_score']}, "
-        f"metrics_flagged={item['metrics_flagged_count']}, color={item['color_code']}"
+        f"  - {item.get('region', 'unknown')}: readiness={item.get('regional_readiness_score', 'n/a')}, "
+        f"metrics_flagged={item.get('metrics_flagged_count', 0)}, color={item.get('color_code', 'unknown')}"
         for item in regional_readiness[:15]
     ])
     
     drought_str = "\n".join([
-        f"  - {item['region']}/{item['province']}: drought_index={item['training_drought_index']}, "
-        f"zero_training_rate={item['zero_training_rate']}%"
+        f"  - {item.get('region', 'unknown')}/{item.get('province', 'unknown')}: drought_index={item.get('training_drought_index', 'n/a')}, "
+        f"zero_training_rate={item.get('zero_training_rate', 0)}%"
         for item in training_drought[:10]
     ])
     
@@ -136,7 +212,7 @@ RETURN ONLY a JSON array of 5 event objects. No markdown, no explanation. Start 
     return prompt
 
 
-def generate_event_recommendations(
+async def generate_event_recommendations(
     snapshot: dict,
     existing_events: list[dict],
     limit: int = 5
@@ -152,34 +228,27 @@ def generate_event_recommendations(
     Returns:
         List of event dicts (not yet saved to DB)
     """
-    if not settings.GEMINI_API_KEY:
-        raise ValueError("GEMINI_API_KEY not configured")
-    
     prompt = build_event_generation_prompt(snapshot, existing_events)
     
     try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash-lite",
-            contents=prompt
-        )
-        if not response or not response.text:
-            raise ValueError("Empty response from Gemini API")
-        raw_text = response.text.strip()
-        
-        # Extract JSON from response (handle markdown code blocks)
-        if "```json" in raw_text:
-            raw_text = raw_text.split("```json")[1].split("```")[0].strip()
-        elif "```" in raw_text:
-            raw_text = raw_text.split("```")[1].split("```")[0].strip()
-        
-        events = json.loads(raw_text)
+        raw_text = await _generate_content_with_retry(prompt)
+        events = _parse_json_payload(raw_text)
         
         # Ensure it's a list
         if not isinstance(events, list):
             events = [events]
+
+        # Fuzzy dedup: protect against semantically duplicated recommendations.
+        filtered_events: list[dict] = []
+        dedup_reference = list(existing_events)
+        for event in events:
+            if _is_fuzzy_duplicate(event, dedup_reference):
+                continue
+            dedup_reference.append(event)
+            filtered_events.append(event)
         
         # Mark as AI-generated, add rationale
-        for event in events[:limit]:
+        for event in filtered_events[:limit]:
             event["ai_generated"] = True
             event["ai_rationale"] = {
                 "generated_at": datetime.utcnow().isoformat(),
@@ -192,13 +261,13 @@ def generate_event_recommendations(
                 "subject_shortages": len([s for s in snapshot.get("subject_gap", []) if s.get("shortage", 0) > 0])
             }
         
-        return events[:limit]
+        return filtered_events[:limit]
     
     except (json.JSONDecodeError, AttributeError, KeyError) as e:
         raise ValueError(f"Failed to parse Gemini event recommendations: {e}")
 
 
-def draft_invitation_email(event_payload: dict, teacher_payload: dict) -> dict:
+async def draft_invitation_email(event_payload: dict, teacher_payload: dict) -> dict:
     """
     Generate a personalized invitation email draft for a teacher and event.
     
@@ -209,9 +278,6 @@ def draft_invitation_email(event_payload: dict, teacher_payload: dict) -> dict:
     Returns:
         Dict with email draft fields: subject, body
     """
-    if not settings.GEMINI_API_KEY:
-        raise ValueError("GEMINI_API_KEY not configured")
-    
     event_title = event_payload.get("title", "Professional Development Event")
     event_date = event_payload.get("event_date") or event_payload.get("suggested_date_earliest", "TBD")
     event_location = event_payload.get("location", "TBD")
@@ -250,21 +316,10 @@ Return ONLY a valid JSON object with this format (no markdown, no explanation):
 """
     
     try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash-lite",
-            contents=prompt
-        )
-        if not response or not response.text:
-            raise ValueError("Empty response from Gemini API")
-        raw_text = response.text.strip()
-        
-        # Extract JSON from response
-        if "```json" in raw_text:
-            raw_text = raw_text.split("```json")[1].split("```")[0].strip()
-        elif "```" in raw_text:
-            raw_text = raw_text.split("```")[1].split("```")[0].strip()
-        
-        draft = json.loads(raw_text)
+        raw_text = await _generate_content_with_retry(prompt)
+        draft = _parse_json_payload(raw_text)
+        if not isinstance(draft, dict):
+            raise ValueError("Gemini invitation draft payload was not a JSON object")
         draft["generated_at"] = datetime.utcnow().isoformat()
         
         return draft
@@ -276,7 +331,7 @@ Return ONLY a valid JSON object with this format (no markdown, no explanation):
 # ─── Sentiment Scoring Functions ──────────────────────────────────────────
 
 
-def score_sentiment_text(text: str) -> float:
+async def score_sentiment_text(text: str) -> float:
     """
     Score sentiment text on a scale from -1.0 (negative) to 1.0 (positive).
     
@@ -286,9 +341,6 @@ def score_sentiment_text(text: str) -> float:
     Returns:
         Float between -1.0 and 1.0
     """
-    if not settings.GEMINI_API_KEY:
-        raise ValueError("GEMINI_API_KEY not configured")
-    
     prompt = f"""Analyze the sentiment of this teacher feedback on a professional development event.
 
 FEEDBACK:
@@ -306,13 +358,7 @@ Example: 0.75
 """
     
     try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash-lite",
-            contents=prompt
-        )
-        if not response or not response.text:
-            raise ValueError("Empty response from Gemini API")
-        score_text = response.text.strip()
+        score_text = await _generate_content_with_retry(prompt)
         
         # Extract number from response
         match = re.search(r"-?\d+\.?\d*", score_text)
@@ -337,19 +383,16 @@ async def score_pending_event_sentiments(db: AsyncSession, batch_size: int = 50)
     Returns:
         Count of rows scored
     """
-    if not settings.GEMINI_API_KEY:
-        raise ValueError("GEMINI_API_KEY not configured")
+    _get_client()
     
     scored_count = 0
-    skip = 0
-    
+
     while True:
         # Fetch batch of unscored sentiments
         result = await db.execute(
             select(EventSentiment)
             .where(EventSentiment.sentiment_score.is_(None))
             .limit(batch_size)
-            .offset(skip)
         )
         batch = result.scalars().all()
         
@@ -359,7 +402,7 @@ async def score_pending_event_sentiments(db: AsyncSession, batch_size: int = 50)
         # Score each sentiment
         for sentiment in batch:
             try:
-                score = score_sentiment_text(sentiment.sentiment_text)
+                score = await score_sentiment_text(sentiment.sentiment_text)
                 sentiment.sentiment_score = score
                 scored_count += 1
             except ValueError:
@@ -369,8 +412,7 @@ async def score_pending_event_sentiments(db: AsyncSession, batch_size: int = 50)
         # Commit batch
         await db.flush()
         
-        skip += batch_size
-    
+
     if scored_count > 0:
         await db.commit()
     
