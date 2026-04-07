@@ -42,6 +42,9 @@ async def register(request: Request, body: RegisterRequest, db: AsyncSession = D
     # Registration changes population data; invalidate analytics snapshot.
     mark_analytics_cache_stale()
 
+    # Commit now so the frontend can immediately call /api/auth/me without racing the transaction.
+    await db.commit()
+
     tokens = _issue_tokens(user)
     return tokens
 

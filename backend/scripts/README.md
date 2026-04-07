@@ -126,3 +126,27 @@ Show all options:
 ```powershell
 python scripts/seed_demo_data.py --help
 ```
+
+### `reset_teacher_record.py`
+
+Resets or deletes a single teacher record safely through SQLAlchemy.
+
+This is useful when direct deletes in Neon fail due to foreign key constraints.
+
+Reset by email (keeps user account, recreates empty teacher profile):
+
+```powershell
+python scripts/reset_teacher_record.py --email teacher@example.com
+```
+
+Delete entire account and profile:
+
+```powershell
+python scripts/reset_teacher_record.py --email teacher@example.com --delete-user
+```
+
+Preview only (no commit):
+
+```powershell
+python scripts/reset_teacher_record.py --email teacher@example.com --dry-run
+```
