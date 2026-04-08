@@ -134,10 +134,12 @@ async def get_recommendations(
     Admin-only endpoint. Returns cached recommendations with timestamp.
     """
     if not _last_recommendations["recommendations"]:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No recommendations generated yet. Call POST /generate-events first."
-        )
+        return {
+            "count": 0,
+            "recommendations": [],
+            "generated_at": None,
+            "note": "No recommendations generated yet. Call POST /generate-events first.",
+        }
     
     return {
         "count": len(_last_recommendations["recommendations"]),

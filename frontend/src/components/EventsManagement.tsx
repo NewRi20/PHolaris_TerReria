@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import { api } from '../services/api';
 
 // --- TYPES (Ready for Backend & Map Integration) ---
 export interface EventItem {
   id: string;
+  slug?: string;
   title: string;
   topic: string;
   region: string;
@@ -20,23 +22,105 @@ export interface EventItem {
   isCriticalArea?: boolean; // Flag to show it targets underserved areas
 }
 
-interface TimelineEvent {
+type BackendEvent = {
   id: string;
-  term: string;
+  slug?: string;
   title: string;
-  desc: string;
-  date: string;
-  icon: string;
-  colorClass: string;
-  bgClass: string;
-}
+  description?: string | null;
+  target_subject?: string | null;
+  target_subject_branch?: string | null;
+  target_regions?: string[] | null;
+  target_provinces?: string[] | null;
+  event_type?: string | null;
+  priority_timeline?: string | null;
+  status?: string;
+  ai_generated?: boolean;
+  suggested_date_latest?: string | null;
+  suggested_date_earliest?: string | null;
+  event_date?: string | null;
+  rsvp_deadline?: string | null;
+  ai_rationale?: Record<string, unknown> | null;
+};
+
+type BackendRecommendation = {
+  title?: string;
+  slug?: string;
+  description?: string;
+  event_type?: string;
+  target_subject?: string | null;
+  target_subject_branch?: string | null;
+  target_regions?: string[];
+  target_provinces?: string[];
+  priority_timeline?: string;
+  recommended_format?: string;
+  suggested_date_latest?: string | null;
+  suggested_date_earliest?: string | null;
+  learning_objectives?: string[];
+  ai_rationale?: Record<string, unknown>;
+};
+
+const normalizeEventStatus = (status?: string): EventItem['status'] => {
+  const normalized = (status || '').toLowerCase();
+  if (normalized === 'approved' || normalized === 'scheduled' || normalized === 'completed') return 'APPROVED';
+  if (normalized === 'reviewing') return 'REVIEWING';
+  if (normalized === 'pending') return 'PENDING';
+  return 'DRAFT';
+};
+
+const joinRegionNames = (regions?: string[] | null) => {
+  if (!regions || regions.length === 0) return 'All Regions';
+  return regions.length === 1 ? regions[0] : regions.join(', ');
+};
+
+const toDeadline = (values: Array<string | null | undefined>) => {
+  const found = values.find(Boolean);
+  return found || undefined;
+};
+
+const makeFallbackSlug = (title: string) =>
+  title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || `event-${Date.now()}`;
+
+const toEventItem = (event: BackendEvent): EventItem => ({
+  id: String(event.id),
+  slug: event.slug,
+  title: event.title,
+  topic: event.target_subject_branch || event.target_subject || event.event_type || 'General Pedagogy',
+  region: joinRegionNames(event.target_regions) || 'All Regions',
+  category: event.event_type || event.target_subject || 'General',
+  status: normalizeEventStatus(event.status),
+  description: event.description || 'No description provided.',
+  matchScore: event.priority_timeline || (event.ai_generated ? 'AI' : 'N/A'),
+  expertVotes: 0,
+  sentiment: event.ai_generated ? 'AI Generated' : 'Manual',
+  sentimentIcon: event.ai_generated ? 'psychology' : 'event_note',
+  sentimentColor: event.ai_generated ? 'text-primary' : 'text-slate-500',
+  expiresAt: toDeadline([event.rsvp_deadline, event.suggested_date_latest, event.event_date]),
+  isCriticalArea: event.ai_generated || normalizeEventStatus(event.status) !== 'APPROVED',
+});
+
+const toFeaturedRecommendation = (rec: BackendRecommendation): EventItem => ({
+  id: rec.slug || `rec_${Date.now()}`,
+  slug: rec.slug || makeFallbackSlug(rec.title || 'recommended-event'),
+  title: rec.title || 'AI Recommended Event',
+  topic: rec.target_subject_branch || rec.target_subject || rec.event_type || 'General Pedagogy',
+  region: joinRegionNames(rec.target_regions),
+  category: rec.event_type || rec.target_subject || 'General',
+  status: 'DRAFT',
+  description: rec.description || 'AI-generated event recommendation.',
+  matchScore: rec.priority_timeline || 'AI',
+  expertVotes: 0,
+  sentiment: 'AI Generated',
+  sentimentIcon: 'psychology',
+  sentimentColor: 'text-primary',
+  expiresAt: toDeadline([rec.suggested_date_latest, rec.suggested_date_earliest]),
+  isCriticalArea: true,
+});
 
 export default function EventsManagement() {
   // --- STATE (Initialized empty for backend) ---
   const [featuredAiRec, setFeaturedAiRec] = useState<EventItem | null>(null);
   const [queue, setQueue] = useState<EventItem[]>([]);
   const [approvedEvents, setApprovedEvents] = useState<EventItem[]>([]);
-  const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   
   // UI & Interactive States
   const [loading, setLoading] = useState(true);
@@ -54,16 +138,35 @@ export default function EventsManagement() {
     async function loadEventData() {
       setLoading(true);
       try {
-        // REPLACE WITH ACTUAL ENDPOINT
-        const response = await fetch('/api/events/intelligence'); 
-        if (!response.ok) throw new Error('Failed to fetch events data');
-        
-        const data = await response.json();
-        setFeaturedAiRec(data.featuredAiRec || null);
-        setQueue(data.queue || []);
-        setApprovedEvents(data.approvedEvents || []);
-        setTimeline(data.timeline || []);
+        const [eventsResult, recommendationsResult] = await Promise.allSettled([
+          api.getEvents({ limit: 100 }),
+          api.getAiRecommendations(),
+        ]);
 
+        const events = eventsResult.status === 'fulfilled' && Array.isArray(eventsResult.value)
+          ? (eventsResult.value as BackendEvent[])
+          : [];
+        const recommendationsPayload = recommendationsResult.status === 'fulfilled'
+          ? recommendationsResult.value
+          : null;
+
+        const recommendations = Array.isArray(recommendationsPayload?.recommendations)
+          ? (recommendationsPayload.recommendations as BackendRecommendation[])
+          : [];
+
+        const mappedQueue = events
+          .filter((event) => ['draft', 'pending', 'reviewing'].includes((event.status || '').toLowerCase()))
+          .map(toEventItem);
+
+        const mappedApproved = events
+          .filter((event) => ['approved', 'scheduled', 'completed'].includes((event.status || '').toLowerCase()))
+          .map(toEventItem);
+
+        const firstRecommendation = recommendations[0] || null;
+
+        setFeaturedAiRec(firstRecommendation ? toFeaturedRecommendation(firstRecommendation) : null);
+        setQueue(mappedQueue);
+        setApprovedEvents(mappedApproved);
       } catch (error) {
         console.error("Events API Error:", error);
       } finally {
@@ -93,35 +196,13 @@ export default function EventsManagement() {
     showToast(`AI Engine Active`, `Analyzing backend risk data for critical regions...`, 'info');
     
     try {
-      // TODO: Replace with actual POST request to ai_service.py
-      // const res = await fetch('/api/events/generate-critical', { method: 'POST' });
-      // const data = await res.json();
-      
-      setTimeout(() => {
-        // Simulated backend response with 1-month deadline logic
-        const expirationDate = new Date();
-        expirationDate.setMonth(expirationDate.getMonth() + 1);
+      const generated = await api.generateAiEvents();
+      const recommendations = Array.isArray(generated?.recommendations) ? generated.recommendations as BackendRecommendation[] : [];
+      const nextFeatured = recommendations[0] ? toFeaturedRecommendation(recommendations[0]) : null;
 
-        const newFeatured: EventItem = {
-          id: `rec_${Date.now()}`,
-          title: "Critical Remedial Math Training",
-          topic: "Algebraic Foundations",
-          region: "Region VIII - Samar",
-          category: "Mathematics",
-          status: "DRAFT",
-          matchScore: "99%",
-          description: "Backend analysis flagged a critical out-of-field teaching rate in Samar. This urgent training targets deployed math educators.",
-          expertVotes: 12,
-          sentiment: "Neutral", sentimentIcon: "warning", sentimentColor: "text-amber-500",
-          coordinates: { lat: 11.7716, lng: 124.8770 },
-          expiresAt: expirationDate.toISOString(),
-          isCriticalArea: true
-        };
-
-        setFeaturedAiRec(newFeatured);
-        setIsGeneratingAi(false);
-        showToast(`Analysis Complete`, `New critical intervention generated based on risk index.`, 'success');
-      }, 2000);
+      setFeaturedAiRec(nextFeatured);
+      setIsGeneratingAi(false);
+      showToast(`Analysis Complete`, `New critical intervention generated based on risk index.`, 'success');
     } catch (error) {
       showToast('Generation Failed', 'Could not reach AI service.', 'error');
       setIsGeneratingAi(false);
@@ -142,15 +223,16 @@ export default function EventsManagement() {
     showToast(`Deploying Event`, `Syncing ${event.title} to Map and notifying teachers...`, 'info');
 
     try {
-      // TODO: Actual API PUT/PATCH request to approve event
-      // await fetch(`/api/events/${event.id}/approve`, { method: 'PATCH' });
+      if (event.slug) {
+        await api.approveAiEvents([event.slug]);
+      } else {
+        await api.approveEvent(event.id);
+      }
 
-      setTimeout(() => {
-        setQueue(prev => prev.filter(q => q.id !== event.id));
-        setApprovedEvents(prev => [{ ...event, status: 'APPROVED' }, ...prev]);
-        setProcessingId(null);
-        showToast(`Successfully Deployed`, `Event is now live on the Teacher Map.`, 'success');
-      }, 1500);
+      setQueue(prev => prev.filter(q => q.id !== event.id));
+      setApprovedEvents(prev => [{ ...event, status: 'APPROVED' }, ...prev]);
+      setProcessingId(null);
+      showToast(`Successfully Deployed`, `Event is now live on the Teacher Map.`, 'success');
     } catch (error) {
       showToast('Deployment Failed', 'Could not process approval.', 'error');
       setProcessingId(null);
@@ -159,9 +241,15 @@ export default function EventsManagement() {
 
   // 4. DELETE EVENT
   const handleDeleteEvent = (id: string, title: string) => {
-    // TODO: Actual API DELETE request
-    setQueue(prev => prev.filter(item => item.id !== id));
-    showToast('Event Removed', `"${title}" has been deleted from the queue.`, 'info');
+    api.deleteEvent(id)
+      .then(() => {
+        setQueue(prev => prev.filter(item => item.id !== id));
+        setApprovedEvents(prev => prev.filter(item => item.id !== id));
+        showToast('Event Removed', `"${title}" has been deleted from the queue.`, 'info');
+      })
+      .catch(() => {
+        showToast('Delete Failed', `Could not delete "${title}".`, 'error');
+      });
   };
 
   // 5. MANUALLY CREATE EVENT
@@ -174,39 +262,55 @@ export default function EventsManagement() {
     const expirationDate = new Date();
     expirationDate.setMonth(expirationDate.getMonth() + 1);
 
-    const newEvent: EventItem = {
-      id: `manual_${Date.now()}`,
-      title: newEventDraft.title,
-      topic: newEventDraft.topic || 'General Pedagogy',
-      region: newEventDraft.region,
-      category: newEventDraft.category || 'General',
-      status: 'PENDING',
-      matchScore: 'N/A',
-      description: newEventDraft.description || 'Manually created event proposal.',
-      expertVotes: 1, 
-      sentiment: 'Neutral',
-      sentimentIcon: 'person',
-      sentimentColor: 'text-slate-500',
-      expiresAt: expirationDate.toISOString(),
-      isCriticalArea: false
-    };
+    const slug = makeFallbackSlug(newEventDraft.title);
 
-    setQueue(prev => [newEvent, ...prev]);
-    setIsCreatingEvent(false);
-    setNewEventDraft({});
-    showToast('Event Created', `Successfully added to the queue. Expires in 1 month.`, 'success');
+    api.createEvent({
+      title: newEventDraft.title,
+      slug,
+      description: newEventDraft.description || 'Manually created event proposal.',
+      event_type: newEventDraft.category || 'General',
+      target_subject: newEventDraft.topic || 'General Pedagogy',
+      target_regions: [newEventDraft.region],
+      ai_generated: false,
+      priority_timeline: 'Medium',
+      suggested_date_latest: expirationDate.toISOString().slice(0, 10),
+      suggested_date_earliest: new Date().toISOString().slice(0, 10),
+    })
+      .then((created) => {
+        const newEvent = toEventItem(created as BackendEvent);
+        setQueue(prev => [newEvent, ...prev]);
+        setIsCreatingEvent(false);
+        setNewEventDraft({});
+        showToast('Event Created', `Successfully added to the queue. Expires in 1 month.`, 'success');
+      })
+      .catch(() => {
+        showToast('Creation Failed', 'Could not create the event.', 'error');
+      });
   };
 
   // 6. SAVE MODIFICATIONS
   const handleSaveModification = (updatedEvent: EventItem) => {
-    // TODO: Actual API PATCH request
-    if (featuredAiRec?.id === updatedEvent.id) {
-      setFeaturedAiRec(updatedEvent);
-    } else {
-      setQueue(prev => prev.map(item => item.id === updatedEvent.id ? updatedEvent : item));
-    }
-    setEditingEvent(null);
-    showToast('Event Modified', `Successfully updated the details for ${updatedEvent.title}.`, 'success');
+    api.updateEvent(updatedEvent.id, {
+      title: updatedEvent.title,
+      description: updatedEvent.description,
+      event_type: updatedEvent.category,
+      target_subject: updatedEvent.topic,
+      target_regions: updatedEvent.region ? [updatedEvent.region] : [],
+      status: updatedEvent.status.toLowerCase(),
+    })
+      .then(() => {
+        if (featuredAiRec?.id === updatedEvent.id) {
+          setFeaturedAiRec(updatedEvent);
+        } else {
+          setQueue(prev => prev.map(item => item.id === updatedEvent.id ? updatedEvent : item));
+          setApprovedEvents(prev => prev.map(item => item.id === updatedEvent.id ? updatedEvent : item));
+        }
+        setEditingEvent(null);
+        showToast('Event Modified', `Successfully updated the details for ${updatedEvent.title}.`, 'success');
+      })
+      .catch(() => {
+        showToast('Update Failed', `Could not update ${updatedEvent.title}.`, 'error');
+      });
   };
 
   if (loading) {

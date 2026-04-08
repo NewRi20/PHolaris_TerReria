@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
@@ -14,12 +14,18 @@ from app.services.analytics_engine import region_metric_detail
 router = APIRouter(prefix="/api/maps", tags=["maps"])
 
 
+def _as_utc_aware(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 def _is_upcoming_event(event: Event) -> bool:
     if event.status in {"void", "completed"}:
         return False
     if event.event_date is None:
         return event.status in {"approved", "scheduled", "voting", "draft"}
-    return event.event_date >= datetime.utcnow()
+    return _as_utc_aware(event.event_date) >= datetime.now(timezone.utc)
 
 
 @router.get("/regions")
