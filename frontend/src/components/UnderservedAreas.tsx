@@ -43,6 +43,19 @@ interface BackendMapRegion {
   color_code?: string;
 }
 
+interface BackendRegionDetail {
+  region?: string;
+  metrics?: {
+    color_code?: string;
+    regional_readiness_score?: number | null;
+  };
+}
+
+interface BackendEventsByRegion {
+  region?: string;
+  events?: unknown[];
+}
+
 export default function UnderservedAreas() {
   // --- STATE (Initialized empty for backend) ---
   const [stats, setStats] = useState<StatsData>({
@@ -68,10 +81,21 @@ export default function UnderservedAreas() {
     async function fetchUnderservedData() {
       setLoading(true);
       try {
-        const [underservedResponse, mapRegionsResponse] = await Promise.all([
+        const [underservedResult, mapRegionsResult, eventsByRegionResult] = await Promise.allSettled([
           api.getUnderservedAreas(50),
           api.getMapRegions(),
+          api.getMapEventsByRegion(),
         ]);
+
+        const underservedResponse = underservedResult.status === 'fulfilled'
+          ? underservedResult.value
+          : { items: [] };
+        const mapRegionsResponse = mapRegionsResult.status === 'fulfilled'
+          ? mapRegionsResult.value
+          : [];
+        const eventsByRegionResponse = eventsByRegionResult.status === 'fulfilled'
+          ? eventsByRegionResult.value
+          : [];
 
         const priorities = Array.isArray((underservedResponse as { items?: unknown[] })?.items)
           ? ((underservedResponse as { items?: unknown[] }).items as BackendPriorityItem[])
@@ -96,11 +120,55 @@ export default function UnderservedAreas() {
           ? (mapRegionsResponse as BackendMapRegion[])
           : [];
 
+        const eventsByRegionRows = Array.isArray(eventsByRegionResponse)
+          ? (eventsByRegionResponse as BackendEventsByRegion[])
+          : [];
+
+        const detailResults = await Promise.allSettled(
+          mapRows
+            .map((row) => row.region)
+            .filter((region): region is string => Boolean(region))
+            .map((region) => api.getMapRegionDetail(region))
+        );
+
+        const detailsByRegion = new Map<string, BackendRegionDetail>();
+        detailResults.forEach((result) => {
+          if (result.status !== 'fulfilled') return;
+          const detail = result.value as BackendRegionDetail;
+          if (!detail.region) return;
+          detailsByRegion.set(detail.region, detail);
+        });
+
+        const eventsByRegionCount = new Map<string, number>();
+        eventsByRegionRows.forEach((row) => {
+          const region = String(row.region ?? '');
+          if (!region) return;
+          const count = Array.isArray(row.events) ? row.events.length : 0;
+          eventsByRegionCount.set(region, count);
+        });
+
+        const colorCodeToFlags = (colorCode?: string) => {
+          const normalized = String(colorCode ?? '').toLowerCase();
+          if (normalized === 'red') return 5;
+          if (normalized === 'orange') return 4;
+          if (normalized === 'yellow') return 3;
+          if (normalized === 'blue') return 2;
+          return 1;
+        };
+
         const mappedMapData: RegionRiskData[] = mapRows.map((row) => {
-          const flags = Number(row.metrics_flagged_count ?? 0);
+          const regionName = String(row.region ?? 'Unknown Region');
+          const detail = detailsByRegion.get(regionName);
+          const fallbackFromColor = colorCodeToFlags(row.color_code || detail?.metrics?.color_code);
+          const baseFlags = Number.isFinite(Number(row.metrics_flagged_count))
+            ? Number(row.metrics_flagged_count)
+            : fallbackFromColor;
+          const upcomingEvents = Number(eventsByRegionCount.get(regionName) ?? 0);
+          const flags = Math.min(5, Math.max(0, baseFlags + (upcomingEvents > 0 ? 0 : 1)));
+
           return {
-            name: String(row.region ?? 'Unknown Region'),
-            flags: Math.min(5, Math.max(0, flags)),
+            name: regionName,
+            flags,
             needs: flags >= 4
               ? 'Urgent regional intervention needed.'
               : flags >= 2
