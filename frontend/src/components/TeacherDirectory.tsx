@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, type ChangeEvent } from 'react';
+import { api } from '../services/api';
 
 // --- TYPES (Ready for Backend Integration) ---
 interface TeacherTag {
@@ -43,6 +44,94 @@ interface AvailableEvent {
   category: string;
 }
 
+interface BackendTeacherProfile {
+  id: string;
+  teacher_id_number?: string | null;
+  school?: string | null;
+  region?: string | null;
+  province?: string | null;
+  current_subject?: string | null;
+  specialization?: string | null;
+  teaching_outside_specialization?: boolean;
+  years_experience?: number | null;
+  last_training_date?: string | null;
+}
+
+interface BackendTraining {
+  training_name?: string;
+  date_attended?: string | null;
+}
+
+interface BackendTeacherFull {
+  profile: BackendTeacherProfile;
+  full_name?: string | null;
+  trainings?: BackendTraining[];
+}
+
+interface BackendMapRegion {
+  metrics_flagged_count?: number;
+  teacher_count?: number;
+}
+
+interface BackendDroughtRow {
+  training_drought_index?: number;
+}
+
+const formatDate = (dateValue?: string | null) => {
+  if (!dateValue) return 'No record';
+  const parsed = new Date(dateValue);
+  if (Number.isNaN(parsed.getTime())) return 'No record';
+  return parsed.toLocaleDateString();
+};
+
+const getYearsExperienceLabel = (years?: number | null) => {
+  if (years === undefined || years === null) return 'N/A';
+  return `${years} year${years === 1 ? '' : 's'}`;
+};
+
+const mapTeacher = (item: BackendTeacherFull): Teacher => {
+  const profile = item.profile;
+  const trainings = Array.isArray(item.trainings) ? [...item.trainings] : [];
+  const sortedTrainings = trainings.sort((a, b) => {
+    const aTs = a.date_attended ? new Date(a.date_attended).getTime() : 0;
+    const bTs = b.date_attended ? new Date(b.date_attended).getTime() : 0;
+    return bTs - aTs;
+  });
+  const latestTraining = sortedTrainings[0];
+
+  const isOutField = Boolean(profile.teaching_outside_specialization);
+  const yearsSinceTraining = profile.last_training_date
+    ? (Date.now() - new Date(profile.last_training_date).getTime()) / (1000 * 60 * 60 * 24 * 365)
+    : Number.POSITIVE_INFINITY;
+  const isDrought = yearsSinceTraining >= 2;
+
+  const tags: TeacherTag[] = [];
+  if (isOutField) {
+    tags.push({ label: 'Out-of-Field', bg: 'bg-error/10', text: 'text-error' });
+  }
+  if (isDrought) {
+    tags.push({ label: 'Training Drought', bg: 'bg-secondary/10', text: 'text-secondary' });
+  }
+  if (tags.length === 0) {
+    tags.push({ label: 'Stable', bg: 'bg-emerald-50', text: 'text-emerald-700' });
+  }
+
+  return {
+    id: String(profile.id),
+    name: item.full_name || profile.teacher_id_number || `Teacher ${String(profile.id).slice(0, 8)}`,
+    tags,
+    school: profile.school || 'No school set',
+    location: [profile.province, profile.region].filter(Boolean).join(', ') || 'Unknown location',
+    specialization: profile.specialization || profile.current_subject || 'Unspecified',
+    status: isOutField ? 'Needs alignment' : 'Aligned',
+    isOutField,
+    experience: getYearsExperienceLabel(profile.years_experience),
+    lastTrainingDate: formatDate(profile.last_training_date),
+    lastTrainingName: latestTraining?.training_name || 'No training recorded',
+    isDrought,
+  };
+};
+
 export default function TeacherDirectory() {
   // --- STATE (Initialized empty for backend) ---
   const [stats, setStats] = useState<DirectoryStats>({ highRiskAreas: 0, trainingDrought: 0, totalEducators: 0 });
@@ -70,33 +159,47 @@ export default function TeacherDirectory() {
     async function fetchDirectoryData() {
       setLoading(true);
       try {
-        // Build query string based on filters and pagination
-        const queryParams = new URLSearchParams({
-          page: pagination.currentPage.toString(),
-          limit: pagination.limit.toString(),
-        });
-        
-        if (filterRegion !== 'All Regions') queryParams.append('region', filterRegion);
-        if (filterSpecialization !== 'All Subjects') queryParams.append('specialization', filterSpecialization);
+        const regionParam = filterRegion !== 'All Regions' ? filterRegion : undefined;
+        const subjectParam = filterSpecialization !== 'All Subjects' ? filterSpecialization : undefined;
 
-        // REPLACE WITH ACTUAL BACKEND ENDPOINT
-        const response = await fetch(`/api/teachers?${queryParams.toString()}`);
-        if (!response.ok) throw new Error('Failed to fetch directory data');
-        
-        const data = await response.json();
-        
-        // The backend calculates these stats based on the live database!
-        setStats(data.stats || { highRiskAreas: 0, trainingDrought: 0, totalEducators: 0 });
-        setTeachers(data.teachers || []);
-        
-        if (data.pagination) {
-          setPagination({
-            currentPage: data.pagination.currentPage,
-            totalPages: data.pagination.totalPages,
-            totalCount: data.pagination.totalCount,
-            limit: data.pagination.limit
-          });
-        }
+        const [teacherProfiles, mapRegions, droughtRows] = await Promise.all([
+          api.getTeachers({ region: regionParam, subject: subjectParam, skip: 0, limit: 100 }),
+          api.getMapRegions(),
+          api.getTrainingDrought(),
+        ]);
+
+        const profiles = Array.isArray(teacherProfiles) ? (teacherProfiles as BackendTeacherProfile[]) : [];
+        const detailRows = await Promise.all(
+          profiles.map(async (profile) => {
+            try {
+              return await api.getTeacherById(String(profile.id));
+            } catch {
+              return { profile, full_name: null, trainings: [] } as BackendTeacherFull;
+            }
+          })
+        );
+
+        const mappedTeachers = detailRows.map((row) => mapTeacher(row as BackendTeacherFull));
+        const totalCount = mappedTeachers.length;
+        const totalPages = Math.max(1, Math.ceil(totalCount / pagination.limit));
+        const currentPage = Math.min(pagination.currentPage, totalPages);
+        const start = (currentPage - 1) * pagination.limit;
+        const end = start + pagination.limit;
+
+        const mapRegionRows = Array.isArray(mapRegions) ? (mapRegions as BackendMapRegion[]) : [];
+        const drought = Array.isArray(droughtRows) ? (droughtRows as BackendDroughtRow[]) : [];
+        const highRiskAreas = mapRegionRows.filter((row) => Number(row.metrics_flagged_count ?? 0) >= 3).length;
+        const trainingDrought = drought.filter((row) => Number(row.training_drought_index ?? 0) >= 0.7).length;
+        const totalEducators = mapRegionRows.reduce((sum, row) => sum + Number(row.teacher_count ?? 0), 0);
+
+        setStats({ highRiskAreas, trainingDrought, totalEducators });
+        setTeachers(mappedTeachers.slice(start, end));
+        setPagination((prev) => ({
+          ...prev,
+          currentPage,
+          totalPages,
+          totalCount,
+        }));
       } catch (error) {
         console.error("Directory API Error:", error);
       } finally {
@@ -106,7 +209,7 @@ export default function TeacherDirectory() {
     }
     
     fetchDirectoryData();
-  }, [pagination.currentPage, searchTrigger]); 
+  }, [pagination.currentPage, pagination.limit, filterRegion, filterSpecialization, searchTrigger]); 
 
 
   // --- INTERACTIVE ACTION HANDLERS ---
@@ -128,20 +231,26 @@ export default function TeacherDirectory() {
       return;
     }
     
-    // Simulate fetching active/approved events from EventsManagement API
-    // const res = await fetch('/api/events/active');
-    // const events = await res.json();
-    const mockEventsFromBackend: AvailableEvent[] = [
-      { id: 'evt_1', title: 'GIDA Physics Bootcamp', region: 'Region VIII', category: 'Physics' },
-      { id: 'evt_2', title: 'Advanced Mathematics Workshop', region: 'BARMM', category: 'Mathematics' },
-      { id: 'evt_3', title: 'Chemistry Lab Safety', region: 'CALABARZON', category: 'Chemistry' }
-    ];
-    
-    setAvailableEvents(mockEventsFromBackend);
-    if (mockEventsFromBackend.length > 0) {
-      setSelectedEventId(mockEventsFromBackend[0].id);
+    try {
+      const events = await api.getEvents({ event_status: 'approved', limit: 50 });
+      const rows = Array.isArray(events) ? events as Array<Record<string, unknown>> : [];
+      const activeEvents: AvailableEvent[] = rows.map((event) => ({
+        id: String(event.id || ''),
+        title: String(event.title || 'Untitled Event'),
+        region: Array.isArray(event.target_regions) && event.target_regions.length > 0
+          ? (event.target_regions as string[]).join(', ')
+          : 'All Regions',
+        category: String(event.target_subject || event.event_type || 'General'),
+      })).filter((event) => event.id);
+
+      setAvailableEvents(activeEvents);
+      if (activeEvents.length > 0) {
+        setSelectedEventId(activeEvents[0].id);
+      }
+      setIsQueueModalOpen(true);
+    } catch (error) {
+      showToast('Load Failed', 'Unable to fetch approved events.', 'error');
     }
-    setIsQueueModalOpen(true);
   };
 
   // 2. Confirm and submit teachers to the specific event queue
@@ -150,29 +259,15 @@ export default function TeacherDirectory() {
     setIsQueueing(true);
 
     try {
-      // TODO: Actual API POST to link teachers to the event
-      /*
-      await fetch('/api/events/assign-teachers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          eventId: selectedEventId, 
-          teacherIds: Array.from(selectedTeacherIds) 
-        })
-      });
-      */
-
-      setTimeout(() => {
-        setIsQueueing(false);
-        setIsQueueModalOpen(false);
-        showToast(
-          'Queue Successful', 
-          `Successfully assigned ${selectedTeacherIds.size} educators to the selected event.`, 
-          'success'
-        );
-        setSelectedTeacherIds(new Set()); 
-      }, 1500);
-      
+      await api.sendEventInvitations(selectedEventId);
+      setIsQueueing(false);
+      setIsQueueModalOpen(false);
+      showToast(
+        'Queue Successful',
+        `Invitation dispatch queued for the selected event.`,
+        'success'
+      );
+      setSelectedTeacherIds(new Set());
     } catch (error) {
       setIsQueueing(false);
       showToast('Queue Failed', 'An error occurred while assigning teachers.', 'error');
@@ -180,7 +275,7 @@ export default function TeacherDirectory() {
   };
 
   // Row selection logic
-  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSelectAll = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
       setSelectedTeacherIds(new Set(teachers.map(t => t.id)));
     } else {
