@@ -5,14 +5,16 @@ import phRegionsData from "../../assets/regions.json";
  * ============================================================================
  * BACKEND INTEGRATION GUIDE FOR ROUTING / API TEAM:
  * ============================================================================
- * * This map component expects an array of objects matching the `RegionRiskData` 
- * interface below. It is completely decoupled from the API fetching logic.
+ * * This map component expects an array of objects matching the RegionRiskData
+ * interface below. It is intentionally decoupled from API fetching logic.
  * * To populate this map:
- * 1. In the parent component (e.g., UnderservedAreas.tsx), fetch the risk data 
- * from your endpoint (e.g., GET /api/regions/risk-analysis).
- * 2. Ensure your backend JSON response matches the `RegionRiskData[]` array format.
- * 3. Pass that array into this component as a prop: `<AdminMap data={backendData} />`
- * * The map will automatically re-render and color-code the regions based on the 
+ * 1. In the parent component (e.g., UnderservedAreas.tsx), fetch region metrics
+ * from GET /api/maps/regions.
+ * 2. Optionally fetch queue/ranking data from GET /api/admin/underserved-areas
+ * for cards and lists in the same page.
+ * 3. Transform the map response into RegionRiskData[] and pass it as:
+ * <AdminMap data={backendData} />
+ * * The map automatically re-renders and color-codes regions based on the
  * `flags` integer (0 = Safe/Green, 5 = Critical/Red).
  */
 
@@ -50,6 +52,30 @@ interface AdminMapProps {
   data?: RegionRiskData[];
 }
 
+const normalizeRegionName = (value: string) => {
+  const text = value.toUpperCase();
+
+  if (text.includes('NCR') || text.includes('NATIONAL CAPITAL')) return 'NCR';
+  if (text === 'CAR' || text.includes('CORDILLERA')) return 'CAR';
+  if (text.includes('REGION I') || text.includes('ILOCOS')) return 'ILOCOS';
+  if (text.includes('REGION II') || text.includes('CAGAYAN VALLEY')) return 'CAGAYAN VALLEY';
+  if (text.includes('REGION III') || text.includes('CENTRAL LUZON')) return 'CENTRAL LUZON';
+  if (text.includes('REGION IV-A') || text.includes('CALABARZON')) return 'CALABARZON';
+  if (text.includes('MIMAROPA')) return 'MIMAROPA';
+  if (text.includes('REGION V') || text.includes('BICOL')) return 'BICOL';
+  if (text.includes('REGION VI') || text.includes('WESTERN VISAYAS')) return 'WESTERN VISAYAS';
+  if (text.includes('REGION VII') || text.includes('CENTRAL VISAYAS')) return 'CENTRAL VISAYAS';
+  if (text.includes('REGION VIII') || text.includes('EASTERN VISAYAS')) return 'EASTERN VISAYAS';
+  if (text.includes('REGION IX') || text.includes('ZAMBOANGA PENINSULA')) return 'ZAMBOANGA PENINSULA';
+  if (text.includes('REGION X') || text.includes('NORTHERN MINDANAO')) return 'NORTHERN MINDANAO';
+  if (text.includes('REGION XI') || text.includes('DAVAO')) return 'DAVAO';
+  if (text.includes('REGION XII') || text.includes('SOCCSKSARGEN')) return 'SOCCSKSARGEN';
+  if (text.includes('REGION XIII') || text.includes('CARAGA')) return 'CARAGA';
+  if (text.includes('BARMM') || text.includes('AUTONOMOUS REGION IN MUSLIM MINDANAO')) return 'BARMM';
+
+  return text.replace(/[^A-Z0-9]+/g, ' ').trim();
+};
+
 // Defaults to an empty array. If the backend sends nothing, the map defaults to 0 flags (Safe/Green).
 export default function AdminMap({ data = [] }: AdminMapProps) {
   
@@ -64,12 +90,12 @@ export default function AdminMap({ data = [] }: AdminMapProps) {
   const resolveRegionData = (properties: any) => {
     const rawJsonString = properties.adm1_en || properties.NAME_1 || properties.REGION || properties.adm2_en || properties.name || "";
     const mappedRegion = provinceToRegion[rawJsonString] || rawJsonString;
+    const normalizedMapRegion = normalizeRegionName(mappedRegion);
     
     // Look up the matching data from the injected 'data' prop from the backend
     const matched = data.find(d => {
-      const safeJson = mappedRegion.toUpperCase();
-      const safeMock = d.name.toUpperCase();
-      return safeJson.includes(safeMock) || safeMock.includes(safeJson) || (safeJson.includes("NCR") && safeMock.includes("CAPITAL"));
+      const normalizedDataRegion = normalizeRegionName(d.name);
+      return normalizedMapRegion === normalizedDataRegion;
     });
 
     return {
