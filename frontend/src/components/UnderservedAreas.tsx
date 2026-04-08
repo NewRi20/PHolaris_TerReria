@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
-import AdminMap, { type RegionRiskData } from './ui/AdminMap'; 
+import AdminMap, { type RegionRiskData } from './ui/AdminMap';
+import { api } from '../services/api';
+ 
 
 // --- TYPES (Ready for Backend Integration) ---
 interface StatsData {
@@ -27,6 +29,20 @@ interface PredictionItem {
   textClass: string;
 }
 
+interface BackendPriorityItem {
+  rank?: number;
+  region?: string;
+  priority_score?: number;
+  metrics_flagged_count?: number;
+}
+
+interface BackendMapRegion {
+  region?: string;
+  metrics_flagged_count?: number;
+  teacher_count?: number;
+  color_code?: string;
+}
+
 export default function UnderservedAreas() {
   // --- STATE (Initialized empty for backend) ---
   const [stats, setStats] = useState<StatsData>({
@@ -52,23 +68,70 @@ export default function UnderservedAreas() {
     async function fetchUnderservedData() {
       setLoading(true);
       try {
-        const response = await fetch('/api/underserved-areas');
-        
-        if (!response.ok) throw new Error('Failed to fetch underserved areas data');
-        const data = await response.json();
+        const [underservedResponse, mapRegionsResponse] = await Promise.all([
+          api.getUnderservedAreas(50),
+          api.getMapRegions(),
+        ]);
 
-        setStats(data.stats || {
-          riskIndex: { value: "-", trend: "" },
-          personnel: { value: "-", progress: 0 },
-          shortage: { value: "-" }
+        const priorities = Array.isArray((underservedResponse as { items?: unknown[] })?.items)
+          ? ((underservedResponse as { items?: unknown[] }).items as BackendPriorityItem[])
+          : [];
+
+        const mappedRankings: PriorityItem[] = priorities.map((item, index) => {
+          const rankNumber = Number(item.rank ?? index + 1);
+          const flags = Number(item.metrics_flagged_count ?? 0);
+          return {
+            rank: `#${rankNumber}`,
+            name: String(item.region ?? 'Unknown Region'),
+            labels: [
+              `${flags} flagged metric${flags === 1 ? '' : 's'}`,
+              flags >= 3 ? 'High Intervention Need' : 'Monitoring',
+            ],
+            score: Number(item.priority_score ?? 0).toFixed(2),
+            isCritical: flags >= 3,
+          };
         });
-        
-        setPriorityQueue(data.priorityQueue || []);
-        setFullRankings(data.fullRankings || []);
-        setPredictions(data.predictions || []);
-        
-        // THE FIX: Capture the map data
-        setMapData(data.mapData || []);
+
+        const mapRows = Array.isArray(mapRegionsResponse)
+          ? (mapRegionsResponse as BackendMapRegion[])
+          : [];
+
+        const mappedMapData: RegionRiskData[] = mapRows.map((row) => {
+          const flags = Number(row.metrics_flagged_count ?? 0);
+          return {
+            name: String(row.region ?? 'Unknown Region'),
+            flags: Math.min(5, Math.max(0, flags)),
+            needs: flags >= 4
+              ? 'Urgent regional intervention needed.'
+              : flags >= 2
+              ? 'Targeted support and training recommended.'
+              : 'No immediate action required.',
+          };
+        });
+
+        const totalTeachers = mapRows.reduce((sum, row) => sum + Number(row.teacher_count ?? 0), 0);
+        const totalFlags = mapRows.reduce((sum, row) => sum + Number(row.metrics_flagged_count ?? 0), 0);
+        const avgRisk = mapRows.length > 0 ? totalFlags / mapRows.length : 0;
+        const criticalCount = mapRows.filter((row) => Number(row.metrics_flagged_count ?? 0) >= 3).length;
+
+        setStats({
+          riskIndex: {
+            value: avgRisk > 0 ? avgRisk.toFixed(2) : '-',
+            trend: criticalCount > 0 ? `${criticalCount} critical regions` : '',
+          },
+          personnel: {
+            value: totalTeachers > 0 ? totalTeachers.toLocaleString() : '-',
+            progress: Math.min(100, Math.round((mapRows.length / 17) * 100)),
+          },
+          shortage: {
+            value: `${criticalCount}`,
+          },
+        });
+
+        setPriorityQueue(mappedRankings.slice(0, 5));
+        setFullRankings(mappedRankings);
+        setPredictions([]);
+        setMapData(mappedMapData);
 
       } catch (error) {
         console.warn("API Error, using fallback layout.", error);
