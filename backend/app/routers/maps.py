@@ -157,15 +157,23 @@ async def get_events_by_region(db: AsyncSession = Depends(get_db)):
     for event in events_result.scalars().all():
         if not _is_upcoming_event(event):
             continue
+        if event.status not in {"approved", "scheduled"}:
+            continue
 
         payload = {
             "event_id": str(event.id),
             "title": event.title,
             "status": event.status,
             "event_date": event.event_date,
+            "description": event.description,
+            "event_type": event.event_type,
+            "recommended_format": event.recommended_format,
+            "priority_timeline": event.priority_timeline,
+            "location": event.location,
             "interested_count": int(interest_by_event.get(event.id, 0)),
         }
-        for region in event.target_regions or []:
+        target_buckets = event.target_regions or event.target_provinces or []
+        for region in target_buckets:
             grouped[region].append(payload)
 
     return [{"region": region, "events": events} for region, events in grouped.items()]

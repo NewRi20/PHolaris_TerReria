@@ -41,6 +41,48 @@ interface TeacherMapProps {
   onEventAction?: (actionType: 'register' | 'request', eventData: any) => void;
 }
 
+const normalizeRegionName = (value: string) => {
+  const original = String(value ?? '').trim();
+  const mappedFromProvince = provinceToRegion[original] || original;
+  const text = String(mappedFromProvince ?? '').toUpperCase();
+
+  if (text.includes('NCR') || text.includes('NATIONAL CAPITAL')) return 'NCR';
+  if (text === 'CAR' || text.includes('CORDILLERA')) return 'CAR';
+  if (text === 'R1' || text === 'REGION 1') return 'ILOCOS';
+  if (text === 'R2' || text === 'REGION 2') return 'CAGAYAN VALLEY';
+  if (text === 'R3' || text === 'REGION 3') return 'CENTRAL LUZON';
+  if (text === 'R4A' || text === 'REGION 4A' || text === 'REGION IVA') return 'CALABARZON';
+  if (text === 'R4B' || text === 'REGION 4B' || text === 'REGION IVB') return 'MIMAROPA';
+  if (text === 'R5' || text === 'REGION 5') return 'BICOL';
+  if (text === 'R6' || text === 'REGION 6') return 'WESTERN VISAYAS';
+  if (text === 'R7' || text === 'REGION 7') return 'CENTRAL VISAYAS';
+  if (text === 'R8' || text === 'REGION 8') return 'EASTERN VISAYAS';
+  if (text === 'R9' || text === 'REGION 9') return 'ZAMBOANGA PENINSULA';
+  if (text === 'R10' || text === 'REGION 10') return 'NORTHERN MINDANAO';
+  if (text === 'R11' || text === 'REGION 11') return 'DAVAO';
+  if (text === 'R12' || text === 'REGION 12') return 'SOCCSKSARGEN';
+  if (text === 'R13' || text === 'REGION 13') return 'CARAGA';
+  if (text === 'ARMM') return 'BARMM';
+  if (text === 'NIR' || text.includes('NEGROS ISLAND')) return 'WESTERN VISAYAS';
+  if (text.includes('REGION I') || text.includes('ILOCOS')) return 'ILOCOS';
+  if (text.includes('REGION II') || text.includes('CAGAYAN VALLEY')) return 'CAGAYAN VALLEY';
+  if (text.includes('REGION III') || text.includes('CENTRAL LUZON')) return 'CENTRAL LUZON';
+  if (text.includes('REGION IV-A') || text.includes('CALABARZON')) return 'CALABARZON';
+  if (text.includes('MIMAROPA')) return 'MIMAROPA';
+  if (text.includes('REGION V') || text.includes('BICOL')) return 'BICOL';
+  if (text.includes('REGION VI') || text.includes('WESTERN VISAYAS')) return 'WESTERN VISAYAS';
+  if (text.includes('REGION VII') || text.includes('CENTRAL VISAYAS')) return 'CENTRAL VISAYAS';
+  if (text.includes('REGION VIII') || text.includes('EASTERN VISAYAS')) return 'EASTERN VISAYAS';
+  if (text.includes('REGION IX') || text.includes('ZAMBOANGA PENINSULA')) return 'ZAMBOANGA PENINSULA';
+  if (text.includes('REGION X') || text.includes('NORTHERN MINDANAO')) return 'NORTHERN MINDANAO';
+  if (text.includes('REGION XI') || text.includes('DAVAO')) return 'DAVAO';
+  if (text.includes('REGION XII') || text.includes('SOCCSKSARGEN')) return 'SOCCSKSARGEN';
+  if (text.includes('REGION XIII') || text.includes('CARAGA')) return 'CARAGA';
+  if (text.includes('BARMM') || text.includes('AUTONOMOUS REGION IN MUSLIM MINDANAO')) return 'BARMM';
+
+  return text.replace(/[^A-Z0-9]+/g, ' ').trim();
+};
+
 export default function TeacherMap({ data = DEFAULT_EVENT_DATA, onEventAction }: TeacherMapProps) {
   const [activeRegion, setActiveRegion] = useState<any>(null);
   
@@ -56,16 +98,13 @@ export default function TeacherMap({ data = DEFAULT_EVENT_DATA, onEventAction }:
 
     const rawJsonString = properties.adm1_en || properties.NAME_1 || properties.REGION || properties.adm2_en || properties.name || "";
     const mappedRegion = provinceToRegion[rawJsonString] || rawJsonString || "";
+    const normalizedMapRegion = normalizeRegionName(mappedRegion);
     
-    // Strict match logic preventing the toUpperCase undefined crash
+    // Region normalization prevents misses like "Region IV-A" vs "CALABARZON".
     const matched = data?.find(d => {
       if (!d || !d.region) return false;
-      const safeJson = String(mappedRegion).toUpperCase();
-      const safeMock = String(d.region).toUpperCase();
-      
-      if (!safeJson || !safeMock) return false;
-      
-      return safeJson.includes(safeMock) || safeMock.includes(safeJson) || (safeJson.includes("NCR") && safeMock.includes("CAPITAL"));
+      const normalizedDataRegion = normalizeRegionName(d.region);
+      return normalizedMapRegion === normalizedDataRegion;
     });
 
     if (matched) {
