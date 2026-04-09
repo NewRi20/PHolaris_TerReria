@@ -8,6 +8,8 @@ export interface MapEventData {
   title: string;
   topic: string;
   date: string;
+  description?: string;
+  location?: string;
   status: "active" | "drought" | "historical";
 }
 
@@ -67,7 +69,7 @@ export default function TeacherMap({ data = DEFAULT_EVENT_DATA, onEventAction }:
     });
 
     if (matched) {
-      return { eventId: matched.eventId, regionName: mappedRegion, title: matched.title, topic: matched.topic, date: matched.date, status: matched.status, rawName: rawJsonString };
+      return { eventId: matched.eventId, regionName: mappedRegion, title: matched.title, topic: matched.topic, date: matched.date, description: matched.description, location: matched.location, status: matched.status, rawName: rawJsonString };
     } else {
       return { regionName: mappedRegion || "Unknown", title: "General Assembly", topic: "General", date: "TBA", status: "historical", rawName: rawJsonString };
     }
@@ -139,6 +141,12 @@ export default function TeacherMap({ data = DEFAULT_EVENT_DATA, onEventAction }:
                 <strong className="text-slate-50 text-sm block mb-1">{activeRegion.title}</strong>
                 {activeRegion.status === 'active' && (
                   <span className="text-blue-400 text-xs font-medium block mb-1">Topic: {activeRegion.topic}</span>
+                )}
+                {activeRegion.location && (
+                  <span className="text-slate-300 text-xs block mb-1">Location: {activeRegion.location}</span>
+                )}
+                {activeRegion.description && (
+                  <p className="text-slate-400 text-xs leading-relaxed mb-1">{activeRegion.description}</p>
                 )}
                 <span className="text-slate-400 text-xs flex items-center gap-1.5 mt-1">
                   <span className="material-symbols-outlined text-[14px]">calendar_today</span>

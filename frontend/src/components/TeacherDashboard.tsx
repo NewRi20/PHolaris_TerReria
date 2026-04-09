@@ -61,21 +61,24 @@ interface RegionMetricRow {
   readiness_score: number | null;
 }
 
-interface RegionEventGroup {
-  region: string;
-  events: Array<{
-    event_id: string;
-    title: string;
-    status: string;
-    event_date: string | null;
-    interested_count: number;
-  }>;
-}
-
 interface DashboardEventData extends MapEventData {
   regionName?: string;
   rawName?: string;
   latlng?: { lat: number; lng: number };
+}
+
+interface EventResponseLike {
+  id: string;
+  title: string;
+  description?: string | null;
+  event_type?: string | null;
+  target_regions?: string[] | null;
+  target_provinces?: string[] | null;
+  recommended_format?: string | null;
+  priority_timeline?: string | null;
+  status: string;
+  event_date?: string | null;
+  location?: string | null;
 }
 
 type StoredActivity = Partial<MyActivityItem> & {
@@ -212,17 +215,27 @@ function buildQueueData(rows: RegionMetricRow[]) {
     });
 }
 
-function buildMapEvents(groups: RegionEventGroup[]) {
-  return groups.flatMap((group) =>
-    group.events.map((event) => ({
-      eventId: event.event_id,
-      region: group.region,
+function buildMapEvents(events: EventResponseLike[]) {
+  return events.flatMap((event) => {
+    const regions = event.target_regions?.length ? event.target_regions : event.target_provinces ?? [];
+    const displayRegions = regions.length > 0 ? regions : ['Unknown'];
+    const status = event.status === 'approved' || event.status === 'scheduled'
+      ? 'active'
+      : event.status === 'completed' || event.status === 'void'
+        ? 'historical'
+        : 'drought';
+
+    return displayRegions.map((region) => ({
+      eventId: event.id,
+      region,
       title: event.title,
-      topic: event.status === 'scheduled' ? 'Scheduled Session' : 'Upcoming Training',
+      topic: event.event_type ?? event.recommended_format ?? event.priority_timeline ?? 'Training Event',
       date: formatDate(event.event_date),
-      status: event.status === 'approved' || event.status === 'scheduled' ? 'active' : 'historical',
-    } satisfies MapEventData)),
-  );
+      description: event.description ?? undefined,
+      location: event.location ?? undefined,
+      status,
+    } satisfies MapEventData));
+  });
 }
 
 function buildTrainingActivities(profile: TeacherProfilePayload['profile'], trainings: TeacherProfilePayload['trainings']) {
@@ -327,10 +340,10 @@ export default function TeacherDashboard() {
       setLoading(true);
 
       try {
-        const [teacherResult, mapMetricsResult, groupedEventsResult] = await Promise.allSettled([
+        const [teacherResult, mapMetricsResult, eventsResult] = await Promise.allSettled([
           api.getMyTeacherProfile() as Promise<TeacherProfilePayload>,
           api.getMapRegions() as Promise<RegionMetricRow[]>,
-          api.getMapEventsByRegion() as Promise<RegionEventGroup[]>,
+          api.getEvents({ event_status: 'approved', limit: 100 }) as Promise<EventResponseLike[]>,
         ]);
 
         if (cancelled) return;
@@ -340,7 +353,7 @@ export default function TeacherDashboard() {
           : { profile: {}, trainings: [] } satisfies TeacherProfilePayload;
 
         const mapMetrics = mapMetricsResult.status === 'fulfilled' ? mapMetricsResult.value : [];
-        const groupedEvents = groupedEventsResult.status === 'fulfilled' ? groupedEventsResult.value : [];
+        const events = eventsResult.status === 'fulfilled' ? eventsResult.value : [];
 
         const queueData = buildQueueData(mapMetrics);
         const localActivities = loadStoredActivities();
@@ -350,10 +363,11 @@ export default function TeacherDashboard() {
 
         setUpliftQueue(queueData.slice(0, 5));
         setFullReportData(queueData);
-        setMapEvents(buildMapEvents(groupedEvents));
+        setMapEvents(buildMapEvents(events));
         setMyActivities(mergeActivities(localActivities, trainingActivities));
         setRecommendations(dashboardRecommendations);
-        const rejectedCount = [teacherResult, mapMetricsResult, groupedEventsResult].filter((result) => result.status === 'rejected').length;
+
+        const rejectedCount = [teacherResult, mapMetricsResult, eventsResult].filter((result) => result.status === 'rejected').length;
         if (rejectedCount > 0) {
           showToast('Partial Sync', 'Some dashboard sources were unavailable. Showing cached and local data where possible.', 'info');
         }
