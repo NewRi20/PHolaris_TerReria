@@ -73,10 +73,6 @@ interface BackendMapRegion {
   teacher_count?: number;
 }
 
-interface BackendDroughtRow {
-  training_drought_index?: number;
-}
-
 const formatDate = (dateValue?: string | null) => {
   if (!dateValue) return 'No record';
   const parsed = new Date(dateValue);
@@ -98,10 +94,11 @@ const mapTeacher = (item: BackendTeacherFull): Teacher => {
     return bTs - aTs;
   });
   const latestTraining = sortedTrainings[0];
+  const effectiveLastTrainingDate = profile.last_training_date || latestTraining?.date_attended || null;
 
   const isOutField = Boolean(profile.teaching_outside_specialization);
-  const yearsSinceTraining = profile.last_training_date
-    ? (Date.now() - new Date(profile.last_training_date).getTime()) / (1000 * 60 * 60 * 24 * 365)
+  const yearsSinceTraining = effectiveLastTrainingDate
+    ? (Date.now() - new Date(effectiveLastTrainingDate).getTime()) / (1000 * 60 * 60 * 24 * 365)
     : Number.POSITIVE_INFINITY;
   const isDrought = yearsSinceTraining >= 2;
 
@@ -126,7 +123,7 @@ const mapTeacher = (item: BackendTeacherFull): Teacher => {
     status: isOutField ? 'Needs alignment' : 'Aligned',
     isOutField,
     experience: getYearsExperienceLabel(profile.years_experience),
-    lastTrainingDate: formatDate(profile.last_training_date),
+    lastTrainingDate: formatDate(effectiveLastTrainingDate),
     lastTrainingName: latestTraining?.training_name || 'No training recorded',
     isDrought,
   };
@@ -162,10 +159,9 @@ export default function TeacherDirectory() {
         const regionParam = filterRegion !== 'All Regions' ? filterRegion : undefined;
         const subjectParam = filterSpecialization !== 'All Subjects' ? filterSpecialization : undefined;
 
-        const [teacherProfiles, mapRegions, droughtRows] = await Promise.all([
+        const [teacherProfiles, mapRegions] = await Promise.all([
           api.getTeachers({ region: regionParam, subject: subjectParam, skip: 0, limit: 100 }),
           api.getMapRegions(),
-          api.getTrainingDrought(),
         ]);
 
         const profiles = Array.isArray(teacherProfiles) ? (teacherProfiles as BackendTeacherProfile[]) : [];
@@ -187,9 +183,8 @@ export default function TeacherDirectory() {
         const end = start + pagination.limit;
 
         const mapRegionRows = Array.isArray(mapRegions) ? (mapRegions as BackendMapRegion[]) : [];
-        const drought = Array.isArray(droughtRows) ? (droughtRows as BackendDroughtRow[]) : [];
         const highRiskAreas = mapRegionRows.filter((row) => Number(row.metrics_flagged_count ?? 0) >= 3).length;
-        const trainingDrought = drought.filter((row) => Number(row.training_drought_index ?? 0) >= 0.7).length;
+        const trainingDrought = mappedTeachers.filter((teacher) => teacher.isDrought).length;
         const totalEducators = mapRegionRows.reduce((sum, row) => sum + Number(row.teacher_count ?? 0), 0);
 
         setStats({ highRiskAreas, trainingDrought, totalEducators });
