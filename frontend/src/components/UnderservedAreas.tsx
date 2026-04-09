@@ -56,6 +56,23 @@ interface BackendEventsByRegion {
   events?: unknown[];
 }
 
+interface BackendPredictiveWorkforce {
+  region: string;
+  current_teacher_count: number;
+  projected_hires: number;
+  projected_retirements: number;
+  projected_teacher_demand: number;
+  workforce_projection: number;
+  projected_shortage: number;
+  status: "shortage" | "surplus";
+}
+
+const normalizeRegionKey = (value?: string) =>
+  String(value ?? "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, " ")
+    .trim();
+
 export default function UnderservedAreas() {
   // --- STATE (Initialized empty for backend) ---
   const [stats, setStats] = useState<StatsData>({
@@ -81,10 +98,11 @@ export default function UnderservedAreas() {
     async function fetchUnderservedData() {
       setLoading(true);
       try {
-        const [underservedResult, mapRegionsResult, eventsByRegionResult] = await Promise.allSettled([
+        const [underservedResult, mapRegionsResult, eventsByRegionResult, predictiveResult] = await Promise.allSettled([
           api.getUnderservedAreas(50),
           api.getMapRegions(),
           api.getMapEventsByRegion(),
+          api.getPredictiveWorkforce(),
         ]);
 
         const underservedResponse = underservedResult.status === 'fulfilled'
@@ -95,6 +113,9 @@ export default function UnderservedAreas() {
           : [];
         const eventsByRegionResponse = eventsByRegionResult.status === 'fulfilled'
           ? eventsByRegionResult.value
+          : [];
+        const predictiveResponse = predictiveResult.status === 'fulfilled'
+          ? predictiveResult.value
           : [];
 
         const priorities = Array.isArray((underservedResponse as { items?: unknown[] })?.items)
@@ -114,6 +135,13 @@ export default function UnderservedAreas() {
             score: Number(item.priority_score ?? 0).toFixed(2),
             isCritical: flags >= 3,
           };
+        });
+
+        const queueFlagsByRegion = new Map<string, number>();
+        priorities.forEach((item) => {
+          const key = normalizeRegionKey(item.region);
+          if (!key) return;
+          queueFlagsByRegion.set(key, Number(item.metrics_flagged_count ?? 0));
         });
 
         const mapRows = Array.isArray(mapRegionsResponse)
@@ -156,13 +184,17 @@ export default function UnderservedAreas() {
           return 1;
         };
 
-        const mappedMapData: RegionRiskData[] = mapRows.map((row) => {
+        const mappedMapDataFromRows: RegionRiskData[] = mapRows.map((row) => {
           const regionName = String(row.region ?? 'Unknown Region');
+          const regionKey = normalizeRegionKey(regionName);
           const detail = detailsByRegion.get(regionName);
           const fallbackFromColor = colorCodeToFlags(row.color_code || detail?.metrics?.color_code);
-          const baseFlags = Number.isFinite(Number(row.metrics_flagged_count))
-            ? Number(row.metrics_flagged_count)
-            : fallbackFromColor;
+          const mapFlagRaw = row.metrics_flagged_count;
+          const mapFlags = typeof mapFlagRaw === 'number' && Number.isFinite(mapFlagRaw)
+            ? mapFlagRaw
+            : null;
+          const queueFlags = queueFlagsByRegion.get(regionKey);
+          const baseFlags = mapFlags ?? queueFlags ?? fallbackFromColor;
           const upcomingEvents = Number(eventsByRegionCount.get(regionName) ?? 0);
           const flags = Math.min(5, Math.max(0, baseFlags + (upcomingEvents > 0 ? 0 : 1)));
 
@@ -177,29 +209,96 @@ export default function UnderservedAreas() {
           };
         });
 
+        const existingRegionKeys = new Set(mappedMapDataFromRows.map((item) => normalizeRegionKey(item.name)));
+        const queueOnlyMapRows: RegionRiskData[] = priorities
+          .filter((item) => !existingRegionKeys.has(normalizeRegionKey(item.region)))
+          .map((item) => {
+            const flags = Math.min(5, Math.max(0, Number(item.metrics_flagged_count ?? 0)));
+            return {
+              name: String(item.region ?? 'Unknown Region'),
+              flags,
+              needs: flags >= 4
+                ? 'Urgent regional intervention needed.'
+                : flags >= 2
+                ? 'Targeted support and training recommended.'
+                : 'No immediate action required.',
+            };
+          });
+
+        const mappedMapData: RegionRiskData[] = [...mappedMapDataFromRows, ...queueOnlyMapRows];
+
         const totalTeachers = mapRows.reduce((sum, row) => sum + Number(row.teacher_count ?? 0), 0);
-        const totalFlags = mapRows.reduce((sum, row) => sum + Number(row.metrics_flagged_count ?? 0), 0);
-        const avgRisk = mapRows.length > 0 ? totalFlags / mapRows.length : 0;
-        const criticalCount = mapRows.filter((row) => Number(row.metrics_flagged_count ?? 0) >= 3).length;
+        const totalFlags = mappedMapData.reduce((sum, row) => sum + Number(row.flags ?? 0), 0);
+        const avgRisk = mappedMapData.length > 0 ? totalFlags / mappedMapData.length : 0;
+        const criticalCount = mappedMapData.filter((row) => Number(row.flags ?? 0) >= 3).length;
+
+        // For Predicted Shortage, use either critical regions count or total projected shortage
+        const predictiveWorkforce = Array.isArray(predictiveResponse)
+          ? (predictiveResponse as BackendPredictiveWorkforce[])
+          : [];
+        const totalProjectedShortage = predictiveWorkforce.reduce((sum, item) => sum + Math.max(0, item.projected_shortage), 0);
+        
+        // Use critical count if available; otherwise use total projected shortage count
+        const displayedShortage = criticalCount > 0 ? criticalCount : (totalProjectedShortage > 0 ? predictiveWorkforce.filter(p => p.projected_shortage > 0).length : 0);
 
         setStats({
           riskIndex: {
             value: avgRisk > 0 ? avgRisk.toFixed(2) : '-',
-            trend: criticalCount > 0 ? `${criticalCount} critical regions` : '',
+            trend: criticalCount > 0 ? `${criticalCount} critical regions` : totalProjectedShortage > 0 ? `${totalProjectedShortage} teacher shortage` : '',
           },
           personnel: {
-            value: totalTeachers > 0 ? totalTeachers.toLocaleString() : '-',
+            value: totalTeachers.toLocaleString(),
             progress: Math.min(100, Math.round((mapRows.length / 17) * 100)),
           },
           shortage: {
-            value: `${criticalCount}`,
+            value: `${displayedShortage}`,
           },
         });
 
         setPriorityQueue(mappedRankings.slice(0, 5));
         setFullRankings(mappedRankings);
-        setPredictions([]);
+        
+        // Map predictive workforce data to PredictionItem[]
+        const mappedPredictions: PredictionItem[] = predictiveWorkforce.map((item) => {
+          const isShortage = item.status === "shortage" && item.projected_shortage > 0;
+          const barWidth = isShortage 
+            ? Math.min(100, Math.round((item.projected_shortage / item.projected_teacher_demand) * 100))
+            : 0;
+          
+          return {
+            region: item.region,
+            status: item.status === "shortage" ? "Shortage Projected" : "Surplus Projected",
+            icon: isShortage ? "warning" : "check_circle",
+            gap: `${item.projected_shortage}`,
+            formula: `Demand: ${item.projected_teacher_demand} | Supply: ${item.workforce_projection}`,
+            barWidth: `${barWidth}%`,
+            colorClass: isShortage ? "bg-red-500" : "bg-green-500",
+            textClass: isShortage ? "text-error" : "text-success",
+          };
+        });
+
+        // Debug logging for troubleshooting
+        console.debug('[UnderservedAreas] Data Processing Summary:', {
+          mapRowsCount: mapRows.length,
+          totalTeachers,
+          totalFlags,
+          avgRisk: avgRisk.toFixed(2),
+          criticalCount,
+          predictiveCount: mappedPredictions.length,
+          priorityCount: mappedRankings.length,
+          regionSampleFlags: mapRows.slice(0, 3).map(r => ({ region: r.region, flags: r.metrics_flagged_count })),
+          mapRowsWithoutFlags: mapRows.filter((r) => r.metrics_flagged_count == null).length,
+        });
+        
+        if (totalFlags === 0 && mapRows.length > 0) {
+          console.warn('[UnderservedAreas] ⚠ WARNING: No flagged metrics detected across any regions. This may indicate:');
+          console.warn('  1. Analytics cache not updated - try refreshing analytics');
+          console.warn('  2. Regional readiness scores not calculated yet');
+          console.warn('  3. No teacher profile data loaded into system');
+        }
+        
         setMapData(mappedMapData);
+        setPredictions(mappedPredictions);
 
       } catch (error) {
         console.warn("API Error, using fallback layout.", error);

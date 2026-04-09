@@ -439,9 +439,9 @@ export default function EventsManagement() {
                           </div>
                           <p className="text-[10px] text-slate-500 mt-0.5">{event.region} • {event.category}</p>
                         </td>
-                        <td className="px-6 py-5 text-center">
+                        <td className="px-4 py-3 text-center">
                           {expired ? (
-                            <span className="px-3 py-1 rounded-full bg-error/10 border border-error/20 text-error text-[10px] font-bold">VOID (EXPIRED)</span>
+                            <span className="flex px-3 py-1 rounded-full bg-error/10 border border-error/20 text-error text-[10px] font-bold flex-wrap:nowrap">VOID (EXPIRED)</span>
                           ) : (
                             <span className="px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-600 text-[10px] font-bold">
                               {event.status}
