@@ -59,6 +59,8 @@ type BackendRecommendation = {
   ai_rationale?: Record<string, unknown>;
 };
 
+type BackendEventStatus = 'draft' | 'voting' | 'approved' | 'scheduled' | 'completed' | 'void';
+
 const normalizeEventStatus = (status?: string): EventItem['status'] => {
   const normalized = (status || '').toLowerCase();
   if (normalized === 'approved' || normalized === 'scheduled' || normalized === 'completed') return 'APPROVED';
@@ -79,6 +81,38 @@ const toDeadline = (values: Array<string | null | undefined>) => {
 
 const makeFallbackSlug = (title: string) =>
   title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || `event-${Date.now()}`;
+
+const splitRegions = (value?: string) =>
+  String(value ?? '')
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+
+const toBackendEventStatus = (status: EventItem['status']): BackendEventStatus => {
+  if (status === 'APPROVED') return 'approved';
+  if (status === 'REVIEWING') return 'voting';
+  return 'draft';
+};
+
+const isUuid = (value: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
+const oneMonthFromNowIso = () => {
+  const next = new Date();
+  next.setMonth(next.getMonth() + 1);
+  return next.toISOString();
+};
+
+const toValidDeadline = (values: Array<string | null | undefined>) => {
+  const found = values.find(Boolean);
+  if (!found) return oneMonthFromNowIso();
+
+  const parsed = new Date(found);
+  if (Number.isNaN(parsed.getTime())) return oneMonthFromNowIso();
+  if (parsed < new Date()) return oneMonthFromNowIso();
+
+  return parsed.toISOString();
+};
 
 const toEventItem = (event: BackendEvent): EventItem => ({
   id: String(event.id),
@@ -112,7 +146,8 @@ const toFeaturedRecommendation = (rec: BackendRecommendation): EventItem => ({
   sentiment: 'AI Generated',
   sentimentIcon: 'psychology',
   sentimentColor: 'text-primary',
-  expiresAt: toDeadline([rec.suggested_date_latest, rec.suggested_date_earliest]),
+  // Keep queue expiry UX stable even if AI suggests past dates.
+  expiresAt: toValidDeadline([rec.suggested_date_latest, rec.suggested_date_earliest]),
   isCriticalArea: true,
 });
 
@@ -210,11 +245,31 @@ export default function EventsManagement() {
   };
 
   // 2. QUEUE TOP RECOMMENDATION
-  const handleQueueFeatured = () => {
+  const handleQueueFeatured = async () => {
     if (!featuredAiRec) return;
-    setQueue(prev => [{ ...featuredAiRec, status: 'PENDING' }, ...prev]);
-    setFeaturedAiRec(null);
-    showToast('Event Queued', 'Recommendation added to the Approval Queue for final review.', 'success');
+
+    try {
+      const created = await api.createEvent({
+        title: featuredAiRec.title,
+        slug: featuredAiRec.slug || makeFallbackSlug(featuredAiRec.title),
+        description: featuredAiRec.description,
+        event_type: featuredAiRec.category || 'General',
+        target_subject: featuredAiRec.topic || 'General Pedagogy',
+        target_regions: splitRegions(featuredAiRec.region),
+        ai_generated: true,
+        priority_timeline: featuredAiRec.matchScore || 'Medium',
+        suggested_date_latest: new Date(oneMonthFromNowIso()).toISOString().slice(0, 10),
+        suggested_date_earliest: new Date().toISOString().slice(0, 10),
+        status: 'draft',
+      });
+
+      const queuedEvent = toEventItem(created as BackendEvent);
+      setQueue(prev => [{ ...queuedEvent, status: 'PENDING', expiresAt: oneMonthFromNowIso() }, ...prev]);
+      setFeaturedAiRec(null);
+      showToast('Event Queued', 'Recommendation saved and added to the approval queue.', 'success');
+    } catch {
+      showToast('Queue Failed', 'Could not save recommendation to backend queue.', 'error');
+    }
   };
 
   // 3. APPROVE FROM QUEUE
@@ -223,14 +278,23 @@ export default function EventsManagement() {
     showToast(`Deploying Event`, `Syncing ${event.title} to Map and notifying teachers...`, 'info');
 
     try {
-      if (event.slug) {
-        await api.approveAiEvents([event.slug]);
-      } else {
+      let approvedEventId = event.id;
+
+      if (isUuid(event.id)) {
         await api.approveEvent(event.id);
+      } else if (event.slug) {
+        const aiApproval = await api.approveAiEvents([event.slug]) as { events?: Array<{ id?: string; slug?: string }> };
+        const persisted = aiApproval?.events?.[0];
+        if (!persisted?.id) {
+          throw new Error('AI event approval did not persist an event record.');
+        }
+        approvedEventId = persisted.id;
+      } else {
+        throw new Error('Event cannot be approved: missing identifier.');
       }
 
       setQueue(prev => prev.filter(q => q.id !== event.id));
-      setApprovedEvents(prev => [{ ...event, status: 'APPROVED' }, ...prev]);
+      setApprovedEvents(prev => [{ ...event, id: approvedEventId, status: 'APPROVED' }, ...prev]);
       setProcessingId(null);
       showToast(`Successfully Deployed`, `Event is now live on the Teacher Map.`, 'success');
     } catch (error) {
@@ -241,6 +305,12 @@ export default function EventsManagement() {
 
   // 4. DELETE EVENT
   const handleDeleteEvent = (id: string, title: string) => {
+    if (!isUuid(id)) {
+      setQueue(prev => prev.filter(item => item.id !== id));
+      showToast('Event Removed', `Unsaved queue item "${title}" removed locally.`, 'info');
+      return;
+    }
+
     api.deleteEvent(id)
       .then(() => {
         setQueue(prev => prev.filter(item => item.id !== id));
@@ -290,13 +360,19 @@ export default function EventsManagement() {
 
   // 6. SAVE MODIFICATIONS
   const handleSaveModification = (updatedEvent: EventItem) => {
+    if (!isUuid(updatedEvent.id)) {
+      setQueue(prev => prev.map(item => item.id === updatedEvent.id ? updatedEvent : item));
+      showToast('Saved Locally', `${updatedEvent.title} updated locally. Queue it to persist.`, 'info');
+      return;
+    }
+
     api.updateEvent(updatedEvent.id, {
       title: updatedEvent.title,
       description: updatedEvent.description,
       event_type: updatedEvent.category,
       target_subject: updatedEvent.topic,
-      target_regions: updatedEvent.region ? [updatedEvent.region] : [],
-      status: updatedEvent.status.toLowerCase(),
+      target_regions: splitRegions(updatedEvent.region),
+      status: toBackendEventStatus(updatedEvent.status),
     })
       .then(() => {
         if (featuredAiRec?.id === updatedEvent.id) {
@@ -441,7 +517,7 @@ export default function EventsManagement() {
                         </td>
                         <td className="px-4 py-3 text-center">
                           {expired ? (
-                            <span className="flex px-3 py-1 rounded-full bg-error/10 border border-error/20 text-error text-[10px] font-bold flex-wrap:nowrap">VOID (EXPIRED)</span>
+                            <span className="flex px-3 py-1 rounded-full bg-amber-100 border border-amber-200 text-amber-700 text-[10px] font-bold flex-wrap:nowrap">EXPIRED (DEADLINE)</span>
                           ) : (
                             <span className="px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-slate-600 text-[10px] font-bold">
                               {event.status}
