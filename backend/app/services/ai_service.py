@@ -79,6 +79,31 @@ def _event_signature(event: dict) -> str:
     return f"{title}|{subject}|{regions}".strip()
 
 
+def _event_strict_key(event: dict) -> str:
+    """A stricter duplicate key for suppressing repeated recommendations.
+
+    Uses normalized title + subject branch/subject + regions.
+    """
+    title = re.sub(r"[^a-z0-9]+", " ", (event.get("title") or "").lower()).strip()
+    subject = (
+        event.get("target_subject_branch")
+        or event.get("target_subject")
+        or ""
+    )
+    subject = re.sub(r"[^a-z0-9]+", " ", str(subject).lower()).strip()
+    regions = ",".join(sorted(str(r).strip().lower() for r in (event.get("target_regions") or [])))
+    return f"{title}|{subject}|{regions}".strip()
+
+
+def _event_theme_key(event: dict) -> str:
+    """Theme-level key to avoid repeated ideas with minor wording changes."""
+    subject = event.get("target_subject_branch") or event.get("target_subject") or ""
+    subject = re.sub(r"[^a-z0-9]+", " ", str(subject).lower()).strip()
+    event_type = re.sub(r"[^a-z0-9]+", " ", str(event.get("event_type") or "").lower()).strip()
+    regions = ",".join(sorted(str(r).strip().lower() for r in (event.get("target_regions") or [])))
+    return f"{subject}|{event_type}|{regions}".strip()
+
+
 def _is_fuzzy_duplicate(candidate: dict, existing_events: list[dict], threshold: float = 0.86) -> bool:
     candidate_signature = _event_signature(candidate)
     if not candidate_signature:
@@ -207,6 +232,10 @@ FOR EACH EVENT, generate a JSON object with these fields (no markdown, pure JSON
 }}
 
 RETURN ONLY a JSON array of 5 event objects. No markdown, no explanation. Start with '[' and end with ']'.
+
+DIVERSITY CONSTRAINTS:
+- Do not produce two events with the same target_subject and the same target_regions.
+- Do not produce near-duplicate titles that differ only by wording.
 """
     
     return prompt
@@ -241,9 +270,27 @@ async def generate_event_recommendations(
         # Fuzzy dedup: protect against semantically duplicated recommendations.
         filtered_events: list[dict] = []
         dedup_reference = list(existing_events)
+        strict_seen = {_event_strict_key(e) for e in dedup_reference if isinstance(e, dict)}
+        theme_seen = {_event_theme_key(e) for e in dedup_reference if isinstance(e, dict)}
         for event in events:
+            if not isinstance(event, dict):
+                continue
+
+            strict_key = _event_strict_key(event)
+            if strict_key and strict_key in strict_seen:
+                continue
+
             if _is_fuzzy_duplicate(event, dedup_reference):
                 continue
+
+            theme_key = _event_theme_key(event)
+            if theme_key and theme_key in theme_seen:
+                continue
+
+            if strict_key:
+                strict_seen.add(strict_key)
+            if theme_key:
+                theme_seen.add(theme_key)
             dedup_reference.append(event)
             filtered_events.append(event)
         

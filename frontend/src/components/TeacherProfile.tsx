@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { api } from '../services/api';
 
 // --- TYPES (Ready for Backend Integration) ---
 export interface TeacherProfileData {
@@ -8,7 +9,8 @@ export interface TeacherProfileData {
   specialization: string;
   school: string;
   email: string;
-  serviceStartDate: string; // ISO Format (e.g., "2018-06-01") for dynamic calc
+  serviceStartDate?: string; // Optional derived value when backend only has years_experience
+  yearsExperience?: number;
   avatarUrl: string;
 }
 
@@ -19,6 +21,84 @@ export interface Achievement {
   icon: string;
   type: 'EVENT' | 'CERTIFICATION' | 'LOCKED';
   issuer: string;
+}
+
+interface BackendTeacherProfileResponse {
+  id: string;
+  teacher_id_number?: string | null;
+  school?: string | null;
+  grade_level_taught?: string | null;
+  current_subject?: string | null;
+  specialization?: string | null;
+  years_experience?: number | null;
+}
+
+interface BackendTrainingResponse {
+  id: string;
+  training_name: string;
+  training_type?: string | null;
+  date_attended?: string | null;
+  provider?: string | null;
+  created_at: string;
+}
+
+interface BackendTeacherFullResponse {
+  profile: BackendTeacherProfileResponse;
+  trainings: BackendTrainingResponse[];
+  email: string;
+  full_name?: string | null;
+}
+
+function deriveServiceStartDate(yearsExperience?: number | null) {
+  if (typeof yearsExperience !== 'number' || yearsExperience < 0) return undefined;
+  const today = new Date();
+  const derived = new Date(today.getFullYear() - yearsExperience, today.getMonth(), today.getDate());
+  return derived.toISOString().slice(0, 10);
+}
+
+function deriveYearsFromServiceStartDate(serviceStartDate?: string) {
+  if (!serviceStartDate) return undefined;
+
+  const start = new Date(serviceStartDate);
+  if (Number.isNaN(start.getTime())) return undefined;
+
+  const now = new Date();
+  let years = now.getFullYear() - start.getFullYear();
+  if (now.getMonth() < start.getMonth() || (now.getMonth() === start.getMonth() && now.getDate() < start.getDate())) {
+    years -= 1;
+  }
+
+  return Math.max(0, years);
+}
+
+function mapTrainingToAchievement(training: BackendTrainingResponse): Achievement {
+  const normalizedType = (training.training_type ?? '').toLowerCase();
+  const isEvent = normalizedType.includes('event') || normalizedType.includes('seminar') || normalizedType.includes('workshop');
+
+  return {
+    id: `training_${training.id}`,
+    title: training.training_name,
+    date: training.date_attended ?? training.created_at,
+    icon: isEvent ? 'event_available' : 'workspace_premium',
+    type: isEvent ? 'EVENT' : 'CERTIFICATION',
+    issuer: training.provider ?? 'DOST STAR',
+  };
+}
+
+function mapTeacherApiToProfile(data: BackendTeacherFullResponse): TeacherProfileData {
+  const yearsExperience = data.profile.years_experience ?? undefined;
+
+  return {
+    id: data.profile.teacher_id_number ?? String(data.profile.id),
+    fullName: data.full_name ?? 'Teacher',
+    role: data.profile.grade_level_taught ?? 'STEM Educator',
+    specialization: data.profile.specialization ?? data.profile.current_subject ?? 'Not set',
+    school: data.profile.school ?? 'Not set',
+    email: data.email,
+    yearsExperience,
+    serviceStartDate: deriveServiceStartDate(yearsExperience),
+    avatarUrl: '',
+  };
 }
 
 export default function TeacherProfile() {
@@ -33,7 +113,6 @@ export default function TeacherProfile() {
   // Profile Edit States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editDraft, setEditDraft] = useState<Partial<TeacherProfileData>>({});
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
   // Certification Edit/Create States
@@ -43,50 +122,36 @@ export default function TeacherProfile() {
   // Full History Modal State
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
 
+  const loadTeacherProfile = async () => {
+    setLoading(true);
+    try {
+      const data = await api.getMyTeacherProfile() as BackendTeacherFullResponse;
+      setProfile((previous) => ({
+        ...mapTeacherApiToProfile(data),
+        avatarUrl: previous?.avatarUrl ?? '',
+      }));
+      setAchievements(
+        (data.trainings ?? [])
+          .map(mapTrainingToAchievement)
+          .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime()),
+      );
+    } catch (error) {
+      console.error('Error fetching teacher profile:', error);
+      setToast({
+        visible: true,
+        title: 'Sync Error',
+        msg: 'Could not load your latest profile records.',
+        type: 'error',
+      });
+      setTimeout(() => setToast((prev) => ({ ...prev, visible: false })), 4000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // --- ACTUAL BACKEND FETCH LOGIC ---
   useEffect(() => {
-    async function fetchTeacherProfile() {
-      setLoading(true);
-      try {
-        // REPLACE WITH ACTUAL ENDPOINT: 
-        // const res = await fetch('/api/teacher/profile');
-        // const data = await res.json();
-
-        // TEMPORARY SIMULATION OF BACKEND DELAY & DATA
-        setTimeout(() => {
-          const backendProfile: TeacherProfileData = {
-            id: "PH-STAR-2024-0892",
-            fullName: "Irwen Fronda",
-            role: "Science Educator",
-            specialization: "Physics",
-            school: "Metro Manila Science High",
-            email: "ifronda@science.edu.ph",
-            serviceStartDate: "2015-06-01", // Used to calculate years of experience dynamically
-            avatarUrl: "", // Empty to trigger the UI Avatars fallback
-          };
-
-          // Using ISO dates so the frontend can easily sort and compute drought status
-          const backendAchievements: Achievement[] = [
-            { id: 'a1', title: "Quantum Computing Seminar", date: "2025-10-12", icon: "biotech", type: 'EVENT', issuer: "DOST STAR" },
-            { id: 'a2', title: "Digital Literacy 2024", date: "2024-01-20", icon: "devices", type: 'CERTIFICATION', issuer: "EdTech PH" },
-            { id: 'a3', title: "Pedagogical Expert", date: "2024-03-10", icon: "psychology", type: 'CERTIFICATION', issuer: "DepEd" },
-            { id: 'a4', title: "Advanced Algebra Workshop", date: "2023-11-05", icon: "calculate", type: 'EVENT', issuer: "Math Society" },
-            { id: 'a5', title: "Robotics Basics", date: "2023-08-22", icon: "smart_toy", type: 'CERTIFICATION', issuer: "DOST" },
-            { id: 'a6', title: "Classroom Management", date: "2023-05-14", icon: "groups", type: 'EVENT', issuer: "DepEd" },
-            { id: 'a7', title: "Global Mentor (Locked)", date: "9999-12-31", icon: "workspace_premium", type: 'LOCKED', issuer: "System" }
-          ];
-
-          setProfile(backendProfile);
-          setAchievements(backendAchievements);
-          setLoading(false);
-        }, 1000);
-
-      } catch (error) {
-        console.error("Error fetching teacher profile:", error);
-        setLoading(false);
-      }
-    }
-    fetchTeacherProfile();
+    void loadTeacherProfile();
   }, []);
 
 
@@ -94,6 +159,10 @@ export default function TeacherProfile() {
 
   // 1. Calculate Years of Experience dynamically based on serviceStartDate
   const yearsOfExperience = useMemo(() => {
+    if (typeof profile?.yearsExperience === 'number') {
+      return Math.max(0, profile.yearsExperience);
+    }
+
     if (!profile?.serviceStartDate) return 0;
     const start = new Date(profile.serviceStartDate);
     const now = new Date();
@@ -102,7 +171,7 @@ export default function TeacherProfile() {
       years--;
     }
     return Math.max(0, years);
-  }, [profile?.serviceStartDate]);
+  }, [profile?.serviceStartDate, profile?.yearsExperience]);
 
   // 2. Automatically compute "Training Drought" and "Last Training Date" from the achievements list
   const { isDrought, lastTrainingStr } = useMemo(() => {
@@ -141,35 +210,55 @@ export default function TeacherProfile() {
   // Profile File Upload Handler
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setAvatarFile(file);
-      setAvatarPreview(URL.createObjectURL(file)); 
+      setAvatarPreview(URL.createObjectURL(e.target.files[0]));
     }
   };
 
   const handleSaveProfile = async () => {
+    if (!profile) return;
+
     setSaving(true);
     try {
-      // BACKEND READY: Using FormData to handle both text fields and the file upload
-      /*
-      const formData = new FormData();
-      formData.append('fullName', editDraft.fullName || '');
-      formData.append('email', editDraft.email || '');
-      ...
-      */
-      
-      setTimeout(() => {
-        setProfile({
-          ...editDraft,
-          avatarUrl: avatarPreview || editDraft.avatarUrl || ''
-        } as TeacherProfileData);
-        setIsEditModalOpen(false);
-        setSaving(false);
+      const yearsExperience =
+        deriveYearsFromServiceStartDate(editDraft.serviceStartDate) ??
+        profile.yearsExperience ??
+        deriveYearsFromServiceStartDate(profile.serviceStartDate);
+
+      await api.updateMyTeacherProfile({
+        school: editDraft.school ?? profile.school,
+        grade_level_taught: editDraft.role ?? profile.role,
+        specialization: editDraft.specialization ?? profile.specialization,
+        current_subject: editDraft.specialization ?? profile.specialization,
+        years_experience: yearsExperience,
+      });
+
+      setProfile((previous) => {
+        if (!previous) return previous;
+        return {
+          ...previous,
+          school: editDraft.school ?? previous.school,
+          role: editDraft.role ?? previous.role,
+          specialization: editDraft.specialization ?? previous.specialization,
+          yearsExperience: yearsExperience ?? previous.yearsExperience,
+          serviceStartDate: editDraft.serviceStartDate ?? previous.serviceStartDate,
+          avatarUrl: avatarPreview ?? previous.avatarUrl,
+        };
+      });
+
+      if (editDraft.fullName && editDraft.fullName !== profile.fullName) {
+        showToast('Partial Update', 'Full name updates are not available from this endpoint yet.', 'info');
+      } else if (editDraft.email && editDraft.email !== profile.email) {
+        showToast('Partial Update', 'Email updates are not available from this endpoint yet.', 'info');
+      } else {
         showToast('Profile Updated', 'Your identity details have been successfully updated.', 'success');
-      }, 1200);
+      }
+
+      setIsEditModalOpen(false);
     } catch (error) {
-      setSaving(false);
+      console.error('Error updating teacher profile:', error);
       showToast('Error', 'Could not update profile at this time.', 'error');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -188,38 +277,42 @@ export default function TeacherProfile() {
 
     setSaving(true);
     try {
-      // TODO: Actual POST/PATCH request to backend
-      setTimeout(() => {
-        let updatedAchievements;
-        if (certDraft.id) {
-          updatedAchievements = achievements.map(a => a.id === certDraft.id ? { ...a, ...certDraft } as Achievement : a);
-        } else {
-          const newCert: Achievement = {
-            ...(certDraft as Achievement),
-            id: `cert_${Date.now()}`,
-            icon: certDraft.type === 'EVENT' ? 'event_available' : 'workspace_premium'
-          };
-          updatedAchievements = [newCert, ...achievements];
-        }
-        
-        setAchievements(updatedAchievements);
-        setIsCertModalOpen(false);
-        setSaving(false);
-        showToast('Record Saved', `Successfully saved "${certDraft.title}".`, 'success');
-      }, 800);
+      if (certDraft.id) {
+        showToast('Not Supported Yet', 'Updating an existing training record is not available yet.', 'info');
+        return;
+      }
+
+      const created = await api.addMyTraining({
+        training_name: certDraft.title,
+        training_type: certDraft.type === 'EVENT' ? 'Seminar' : 'Certification',
+        date_attended: certDraft.date,
+        provider: certDraft.issuer,
+        subject_area: profile?.specialization,
+      }) as BackendTrainingResponse;
+
+      const newAchievement = mapTrainingToAchievement(created);
+      setAchievements((previous) => [newAchievement, ...previous]);
+      setIsCertModalOpen(false);
+      showToast('Record Saved', `Successfully saved "${certDraft.title}".`, 'success');
     } catch (error) {
-      setSaving(false);
+      console.error('Error saving training record:', error);
       showToast('Error', 'Could not save certification.', 'error');
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleDeleteCert = async (id: string) => {
     if(!confirm("Are you sure you want to remove this record?")) return;
-    
+
     try {
-      // TODO: Actual DELETE request to backend
-      setAchievements(prev => prev.filter(a => a.id !== id));
-      showToast('Record Removed', 'The certification has been deleted.', 'info');
+      if (id.startsWith('training_')) {
+        showToast('Not Supported Yet', 'Deleting an existing training record is not available yet.', 'info');
+        return;
+      }
+
+      setAchievements((prev) => prev.filter((a) => a.id !== id));
+      showToast('Record Removed', 'The local certification draft has been deleted.', 'info');
     } catch (error) {
       showToast('Error', 'Could not delete certification.', 'error');
     }
@@ -275,7 +368,6 @@ export default function TeacherProfile() {
               onClick={() => {
                 setEditDraft(profile);
                 setAvatarPreview(null);
-                setAvatarFile(null);
                 setIsEditModalOpen(true);
               }}
               className="absolute top-6 right-6 p-2 bg-white rounded-full shadow-sm border border-slate-200 text-slate-400 hover:text-primary hover:border-primary transition-all z-10"

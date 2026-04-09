@@ -83,6 +83,21 @@ async def generate_events(
             }
             for e in recent_events
         ]
+
+        # Include previously generated (cached) AI recommendations in dedup context.
+        # This avoids getting near-identical outputs in consecutive scans before approval.
+        cached_recommendations = _last_recommendations.get("recommendations", []) or []
+        for rec in cached_recommendations:
+            if not isinstance(rec, dict):
+                continue
+            recent_events_dicts.append(
+                {
+                    "id": rec.get("slug") or rec.get("title") or "cached-ai-rec",
+                    "title": rec.get("title"),
+                    "target_subject": rec.get("target_subject"),
+                    "target_regions": rec.get("target_regions") or [],
+                }
+            )
         
         # Generate event recommendations
         recommendations = await generate_event_recommendations(
@@ -353,7 +368,7 @@ async def approve_events(
                 ai_generated=event_data.get("ai_generated", True),
                 ai_rationale=event_data.get("ai_rationale"),
                 ai_analysis_snapshot=event_data.get("ai_analysis_snapshot"),
-                status="draft",
+                status="approved",
                 created_by=admin.id,
             )
             
