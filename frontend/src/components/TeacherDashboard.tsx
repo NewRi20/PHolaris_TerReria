@@ -81,6 +81,21 @@ interface EventResponseLike {
   location?: string | null;
 }
 
+interface MapEventsByRegionRow {
+  region: string;
+  events: Array<{
+    event_id: string;
+    title: string;
+    status: string;
+    event_date?: string | null;
+    description?: string | null;
+    event_type?: string | null;
+    recommended_format?: string | null;
+    priority_timeline?: string | null;
+    location?: string | null;
+  }>;
+}
+
 type StoredActivity = Partial<MyActivityItem> & {
   id: string;
   title: string;
@@ -238,6 +253,49 @@ function buildMapEvents(events: EventResponseLike[]) {
   });
 }
 
+function buildMapEventsFromRegionGroups(groups: MapEventsByRegionRow[]) {
+  const expandTargetRegions = (region: string) => {
+    const key = String(region ?? '').trim().toUpperCase();
+    if (!key) return ['Unknown'];
+
+    if (key === 'R1') return ['Ilocos'];
+    if (key === 'R2') return ['Cagayan Valley'];
+    if (key === 'R3') return ['Central Luzon'];
+    if (key === 'R4A' || key === 'REGION IV-A') return ['CALABARZON'];
+    if (key === 'R4B') return ['MIMAROPA'];
+    if (key === 'R5') return ['Bicol'];
+    if (key === 'R6') return ['Western Visayas'];
+    if (key === 'R7') return ['Central Visayas'];
+    if (key === 'R8') return ['Eastern Visayas'];
+    if (key === 'R9') return ['Zamboanga Peninsula'];
+    if (key === 'R10') return ['Northern Mindanao'];
+    if (key === 'R11') return ['Davao'];
+    if (key === 'R12') return ['Soccsksargen'];
+    if (key === 'R13') return ['Caraga'];
+    if (key === 'NIR' || key.includes('NEGROS ISLAND')) return ['Western Visayas', 'Central Visayas'];
+
+    return [region || 'Unknown'];
+  };
+
+  return groups.flatMap((group) => {
+    const regions = expandTargetRegions(group.region);
+    const rows = Array.isArray(group.events) ? group.events : [];
+
+    return rows.flatMap((event) =>
+      regions.map((region) => ({
+        eventId: event.event_id,
+        region,
+        title: event.title,
+        topic: event.event_type ?? event.recommended_format ?? event.priority_timeline ?? 'Training Event',
+        date: formatDate(event.event_date),
+        description: event.description ?? undefined,
+        location: event.location ?? undefined,
+        status: event.status === 'approved' || event.status === 'scheduled' ? 'active' : 'historical',
+      } satisfies MapEventData)),
+    );
+  });
+}
+
 function buildTrainingActivities(profile: TeacherProfilePayload['profile'], trainings: TeacherProfilePayload['trainings']) {
   return trainings.map((training) => ({
     id: `training_${training.id}`,
@@ -340,9 +398,10 @@ export default function TeacherDashboard() {
       setLoading(true);
 
       try {
-        const [teacherResult, mapMetricsResult, eventsResult] = await Promise.allSettled([
+        const [teacherResult, mapMetricsResult, mapEventsResult, eventsFallbackResult] = await Promise.allSettled([
           api.getMyTeacherProfile() as Promise<TeacherProfilePayload>,
           api.getMapRegions() as Promise<RegionMetricRow[]>,
+          api.getMapEventsByRegion() as Promise<MapEventsByRegionRow[]>,
           api.getEvents({ event_status: 'approved', limit: 100 }) as Promise<EventResponseLike[]>,
         ]);
 
@@ -353,7 +412,8 @@ export default function TeacherDashboard() {
           : { profile: {}, trainings: [] } satisfies TeacherProfilePayload;
 
         const mapMetrics = mapMetricsResult.status === 'fulfilled' ? mapMetricsResult.value : [];
-        const events = eventsResult.status === 'fulfilled' ? eventsResult.value : [];
+        const groupedMapEvents = mapEventsResult.status === 'fulfilled' ? mapEventsResult.value : [];
+        const approvedEventsFallback = eventsFallbackResult.status === 'fulfilled' ? eventsFallbackResult.value : [];
 
         const queueData = buildQueueData(mapMetrics);
         const localActivities = loadStoredActivities();
@@ -363,11 +423,15 @@ export default function TeacherDashboard() {
 
         setUpliftQueue(queueData.slice(0, 5));
         setFullReportData(queueData);
-        setMapEvents(buildMapEvents(events));
+        const mappedMapEvents = groupedMapEvents.length > 0
+          ? buildMapEventsFromRegionGroups(groupedMapEvents)
+          : buildMapEvents(approvedEventsFallback);
+
+        setMapEvents(mappedMapEvents);
         setMyActivities(mergeActivities(localActivities, trainingActivities));
         setRecommendations(dashboardRecommendations);
 
-        const rejectedCount = [teacherResult, mapMetricsResult, eventsResult].filter((result) => result.status === 'rejected').length;
+        const rejectedCount = [teacherResult, mapMetricsResult, mapEventsResult, eventsFallbackResult].filter((result) => result.status === 'rejected').length;
         if (rejectedCount > 0) {
           showToast('Partial Sync', 'Some dashboard sources were unavailable. Showing cached and local data where possible.', 'info');
         }

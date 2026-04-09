@@ -1,7 +1,8 @@
+import re
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -24,6 +25,80 @@ from app.schemas.teacher import (
 )
 
 router = APIRouter(prefix="/api/teachers", tags=["teachers"])
+
+
+def _canonical_region(value: str) -> str:
+    text = " ".join((value or "").strip().upper().replace("-", " ").split())
+    if not text:
+        return ""
+
+    def has(pattern: str) -> bool:
+        return re.search(pattern, text) is not None
+
+    if "NCR" in text or "NATIONAL CAPITAL" in text:
+        return "NCR"
+    if text == "CAR" or "CORDILLERA" in text:
+        return "CAR"
+    if has(r"\bREGION\s+IV\s*A\b") or has(r"\bREGION\s*4\s*A\b") or has(r"\bR4A\b") or "CALABARZON" in text:
+        return "CALABARZON"
+    if has(r"\bREGION\s+IV\s*B\b") or has(r"\bREGION\s*4\s*B\b") or has(r"\bR4B\b") or "MIMAROPA" in text:
+        return "MIMAROPA"
+    if has(r"\bREGION\s+XIII\b") or has(r"\bREGION\s+13\b") or "CARAGA" in text:
+        return "CARAGA"
+    if has(r"\bREGION\s+XII\b") or has(r"\bREGION\s+12\b") or "SOCCSKSARGEN" in text:
+        return "SOCCSKSARGEN"
+    if has(r"\bREGION\s+XI\b") or has(r"\bREGION\s+11\b") or "DAVAO" in text:
+        return "DAVAO"
+    if has(r"\bREGION\s+X\b") or has(r"\bREGION\s+10\b") or "NORTHERN MINDANAO" in text:
+        return "NORTHERN MINDANAO"
+    if has(r"\bREGION\s+IX\b") or has(r"\bREGION\s+9\b") or "ZAMBOANGA PENINSULA" in text:
+        return "ZAMBOANGA PENINSULA"
+    if has(r"\bREGION\s+VIII\b") or has(r"\bREGION\s+8\b") or "EASTERN VISAYAS" in text:
+        return "EASTERN VISAYAS"
+    if has(r"\bREGION\s+VII\b") or has(r"\bREGION\s+7\b") or "CENTRAL VISAYAS" in text:
+        return "CENTRAL VISAYAS"
+    if has(r"\bREGION\s+VI\b") or has(r"\bREGION\s+6\b") or "WESTERN VISAYAS" in text:
+        return "WESTERN VISAYAS"
+    if has(r"\bREGION\s+V\b") or has(r"\bREGION\s+5\b") or "BICOL" in text:
+        return "BICOL"
+    if has(r"\bREGION\s+III\b") or has(r"\bREGION\s+3\b") or "CENTRAL LUZON" in text:
+        return "CENTRAL LUZON"
+    if has(r"\bREGION\s+II\b") or has(r"\bREGION\s+2\b") or "CAGAYAN VALLEY" in text:
+        return "CAGAYAN VALLEY"
+    if has(r"\bREGION\s+I\b") or has(r"\bREGION\s+1\b") or "ILOCOS" in text:
+        return "ILOCOS"
+    if "BARMM" in text or "ARMM" in text or "AUTONOMOUS REGION IN MUSLIM MINDANAO" in text:
+        return "BARMM"
+
+    return text
+
+
+def _region_aliases(value: str) -> list[str]:
+    canonical = _canonical_region(value)
+    if not canonical:
+        return []
+
+    aliases: dict[str, list[str]] = {
+        "NCR": ["NCR", "NATIONAL CAPITAL REGION", "METRO MANILA", "METROPOLITAN MANILA"],
+        "CAR": ["CAR", "CORDILLERA", "CORDILLERA ADMINISTRATIVE REGION"],
+        "ILOCOS": ["ILOCOS", "REGION I", "REGION 1"],
+        "CAGAYAN VALLEY": ["CAGAYAN VALLEY", "REGION II", "REGION 2"],
+        "CENTRAL LUZON": ["CENTRAL LUZON", "REGION III", "REGION 3"],
+        "CALABARZON": ["CALABARZON", "REGION IV A", "REGION IV-A", "REGION 4A", "REGION 4 A", "4A", "R4A"],
+        "MIMAROPA": ["MIMAROPA", "REGION IV B", "REGION IV-B", "REGION 4B", "R4B"],
+        "BICOL": ["BICOL", "REGION V", "REGION 5"],
+        "WESTERN VISAYAS": ["WESTERN VISAYAS", "REGION VI", "REGION 6"],
+        "CENTRAL VISAYAS": ["CENTRAL VISAYAS", "REGION VII", "REGION 7"],
+        "EASTERN VISAYAS": ["EASTERN VISAYAS", "REGION VIII", "REGION 8"],
+        "ZAMBOANGA PENINSULA": ["ZAMBOANGA PENINSULA", "REGION IX", "REGION 9"],
+        "NORTHERN MINDANAO": ["NORTHERN MINDANAO", "REGION X", "REGION 10"],
+        "DAVAO": ["DAVAO", "DAVAO REGION", "REGION XI", "REGION 11"],
+        "SOCCSKSARGEN": ["SOCCSKSARGEN", "REGION XII", "REGION 12"],
+        "CARAGA": ["CARAGA", "REGION XIII", "REGION 13"],
+        "BARMM": ["BARMM", "ARMM", "AUTONOMOUS REGION IN MUSLIM MINDANAO", "BANGSAMORO AUTONOMOUS REGION IN MUSLIM MINDANAO"],
+    }
+    candidates = aliases.get(canonical, [canonical])
+    return list({" ".join(alias.strip().upper().replace("-", " ").split()) for alias in candidates if alias.strip()})
 
 
 # ─── Own Profile ─────────────────────────────────────────────
@@ -161,7 +236,24 @@ async def list_teachers(
 
     query = select(TeacherProfile)
     if region:
-        query = query.where(TeacherProfile.region == region)
+        aliases = _region_aliases(region)
+        if aliases:
+            region_text = func.upper(func.coalesce(TeacherProfile.region, ""))
+            normalized_region = func.upper(
+                func.replace(
+                    func.replace(
+                        func.replace(func.trim(func.coalesce(TeacherProfile.region, "")), "-", " "),
+                        "/",
+                        " ",
+                    ),
+                    ".",
+                    " ",
+                )
+            )
+            alias_like_clauses = [region_text.like(f"%{alias}%") for alias in aliases]
+            query = query.where(or_(normalized_region.in_(aliases), *alias_like_clauses))
+        else:
+            query = query.where(TeacherProfile.region == region)
     if subject:
         query = query.where(TeacherProfile.current_subject == subject)
     query = query.offset(skip).limit(limit)

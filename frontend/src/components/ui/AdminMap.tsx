@@ -53,25 +53,29 @@ interface AdminMapProps {
 }
 
 const normalizeRegionName = (value: string) => {
-  const text = value.toUpperCase();
+  const text = value
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, ' ')
+    .trim();
 
   if (text.includes('NCR') || text.includes('NATIONAL CAPITAL')) return 'NCR';
   if (text === 'CAR' || text.includes('CORDILLERA')) return 'CAR';
-  if (text.includes('REGION I') || text.includes('ILOCOS')) return 'ILOCOS';
-  if (text.includes('REGION II') || text.includes('CAGAYAN VALLEY')) return 'CAGAYAN VALLEY';
-  if (text.includes('REGION III') || text.includes('CENTRAL LUZON')) return 'CENTRAL LUZON';
-  if (text.includes('REGION IV-A') || text.includes('CALABARZON')) return 'CALABARZON';
+  if (text.includes('REGION I') || text.includes('REGION 1') || text.includes('ILOCOS')) return 'ILOCOS';
+  if (text.includes('REGION II') || text.includes('REGION 2') || text.includes('CAGAYAN VALLEY')) return 'CAGAYAN VALLEY';
+  if (text.includes('REGION III') || text.includes('REGION 3') || text.includes('CENTRAL LUZON')) return 'CENTRAL LUZON';
+  if (text.includes('REGION IV A') || text.includes('REGION 4A') || text.includes('R4A') || text.includes('CALABARZON')) return 'CALABARZON';
+  if (text.includes('REGION IV B') || text.includes('REGION 4B') || text.includes('R4B') || text.includes('MIMAROPA')) return 'MIMAROPA';
   if (text.includes('MIMAROPA')) return 'MIMAROPA';
-  if (text.includes('REGION V') || text.includes('BICOL')) return 'BICOL';
-  if (text.includes('REGION VI') || text.includes('WESTERN VISAYAS')) return 'WESTERN VISAYAS';
-  if (text.includes('REGION VII') || text.includes('CENTRAL VISAYAS')) return 'CENTRAL VISAYAS';
-  if (text.includes('REGION VIII') || text.includes('EASTERN VISAYAS')) return 'EASTERN VISAYAS';
-  if (text.includes('REGION IX') || text.includes('ZAMBOANGA PENINSULA')) return 'ZAMBOANGA PENINSULA';
-  if (text.includes('REGION X') || text.includes('NORTHERN MINDANAO')) return 'NORTHERN MINDANAO';
-  if (text.includes('REGION XI') || text.includes('DAVAO')) return 'DAVAO';
-  if (text.includes('REGION XII') || text.includes('SOCCSKSARGEN')) return 'SOCCSKSARGEN';
-  if (text.includes('REGION XIII') || text.includes('CARAGA')) return 'CARAGA';
-  if (text.includes('BARMM') || text.includes('AUTONOMOUS REGION IN MUSLIM MINDANAO')) return 'BARMM';
+  if (text.includes('REGION V') || text.includes('REGION 5') || text.includes('BICOL')) return 'BICOL';
+  if (text.includes('REGION VI') || text.includes('REGION 6') || text.includes('WESTERN VISAYAS')) return 'WESTERN VISAYAS';
+  if (text.includes('REGION VII') || text.includes('REGION 7') || text.includes('CENTRAL VISAYAS')) return 'CENTRAL VISAYAS';
+  if (text.includes('REGION VIII') || text.includes('REGION 8') || text.includes('EASTERN VISAYAS')) return 'EASTERN VISAYAS';
+  if (text.includes('REGION IX') || text.includes('REGION 9') || text.includes('ZAMBOANGA PENINSULA')) return 'ZAMBOANGA PENINSULA';
+  if (text.includes('REGION X') || text.includes('REGION 10') || text.includes('NORTHERN MINDANAO')) return 'NORTHERN MINDANAO';
+  if (text.includes('REGION XI') || text.includes('REGION 11') || text.includes('DAVAO')) return 'DAVAO';
+  if (text.includes('REGION XII') || text.includes('REGION 12') || text.includes('SOCCSKSARGEN')) return 'SOCCSKSARGEN';
+  if (text.includes('REGION XIII') || text.includes('REGION 13') || text.includes('CARAGA')) return 'CARAGA';
+  if (text.includes('BARMM') || text.includes('AUTONOMOUS REGION IN MUSLIM MINDANAO') || text.includes('ARMM')) return 'BARMM';
 
   return text.replace(/[^A-Z0-9]+/g, ' ').trim();
 };

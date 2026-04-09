@@ -73,6 +73,31 @@ const normalizeRegionKey = (value?: string) =>
     .replace(/[^A-Z0-9]+/g, " ")
     .trim();
 
+const canonicalRegionKey = (value?: string) => {
+  const text = normalizeRegionKey(value);
+  if (!text) return "";
+
+  if (text.includes("NCR") || text.includes("NATIONAL CAPITAL")) return "NCR";
+  if (text === "CAR" || text.includes("CORDILLERA")) return "CAR";
+  if (text.includes("REGION I") || text.includes("REGION 1") || text.includes("ILOCOS")) return "ILOCOS";
+  if (text.includes("REGION II") || text.includes("REGION 2") || text.includes("CAGAYAN VALLEY")) return "CAGAYAN VALLEY";
+  if (text.includes("REGION III") || text.includes("REGION 3") || text.includes("CENTRAL LUZON")) return "CENTRAL LUZON";
+  if (text.includes("REGION IV A") || text.includes("REGION 4A") || text.includes("R4A") || text.includes("CALABARZON")) return "CALABARZON";
+  if (text.includes("REGION IV B") || text.includes("REGION 4B") || text.includes("R4B") || text.includes("MIMAROPA")) return "MIMAROPA";
+  if (text.includes("REGION V") || text.includes("REGION 5") || text.includes("BICOL")) return "BICOL";
+  if (text.includes("REGION VI") || text.includes("REGION 6") || text.includes("WESTERN VISAYAS")) return "WESTERN VISAYAS";
+  if (text.includes("REGION VII") || text.includes("REGION 7") || text.includes("CENTRAL VISAYAS")) return "CENTRAL VISAYAS";
+  if (text.includes("REGION VIII") || text.includes("REGION 8") || text.includes("EASTERN VISAYAS")) return "EASTERN VISAYAS";
+  if (text.includes("REGION IX") || text.includes("REGION 9") || text.includes("ZAMBOANGA PENINSULA")) return "ZAMBOANGA PENINSULA";
+  if (text.includes("REGION X") || text.includes("REGION 10") || text.includes("NORTHERN MINDANAO")) return "NORTHERN MINDANAO";
+  if (text.includes("REGION XI") || text.includes("REGION 11") || text.includes("DAVAO")) return "DAVAO";
+  if (text.includes("REGION XII") || text.includes("REGION 12") || text.includes("SOCCSKSARGEN")) return "SOCCSKSARGEN";
+  if (text.includes("REGION XIII") || text.includes("REGION 13") || text.includes("CARAGA")) return "CARAGA";
+  if (text.includes("BARMM") || text.includes("AUTONOMOUS REGION IN MUSLIM MINDANAO") || text.includes("ARMM")) return "BARMM";
+
+  return text;
+};
+
 export default function UnderservedAreas() {
   // --- STATE (Initialized empty for backend) ---
   const [stats, setStats] = useState<StatsData>({
@@ -139,7 +164,7 @@ export default function UnderservedAreas() {
 
         const queueFlagsByRegion = new Map<string, number>();
         priorities.forEach((item) => {
-          const key = normalizeRegionKey(item.region);
+          const key = canonicalRegionKey(item.region);
           if (!key) return;
           queueFlagsByRegion.set(key, Number(item.metrics_flagged_count ?? 0));
         });
@@ -164,12 +189,12 @@ export default function UnderservedAreas() {
           if (result.status !== 'fulfilled') return;
           const detail = result.value as BackendRegionDetail;
           if (!detail.region) return;
-          detailsByRegion.set(detail.region, detail);
+          detailsByRegion.set(canonicalRegionKey(detail.region), detail);
         });
 
         const eventsByRegionCount = new Map<string, number>();
         eventsByRegionRows.forEach((row) => {
-          const region = String(row.region ?? '');
+          const region = canonicalRegionKey(row.region);
           if (!region) return;
           const count = Array.isArray(row.events) ? row.events.length : 0;
           eventsByRegionCount.set(region, count);
@@ -186,8 +211,8 @@ export default function UnderservedAreas() {
 
         const mappedMapDataFromRows: RegionRiskData[] = mapRows.map((row) => {
           const regionName = String(row.region ?? 'Unknown Region');
-          const regionKey = normalizeRegionKey(regionName);
-          const detail = detailsByRegion.get(regionName);
+          const regionKey = canonicalRegionKey(regionName);
+          const detail = detailsByRegion.get(regionKey);
           const fallbackFromColor = colorCodeToFlags(row.color_code || detail?.metrics?.color_code);
           const mapFlagRaw = row.metrics_flagged_count;
           const mapFlags = typeof mapFlagRaw === 'number' && Number.isFinite(mapFlagRaw)
@@ -195,7 +220,7 @@ export default function UnderservedAreas() {
             : null;
           const queueFlags = queueFlagsByRegion.get(regionKey);
           const baseFlags = mapFlags ?? queueFlags ?? fallbackFromColor;
-          const upcomingEvents = Number(eventsByRegionCount.get(regionName) ?? 0);
+          const upcomingEvents = Number(eventsByRegionCount.get(regionKey) ?? 0);
           const flags = Math.min(5, Math.max(0, baseFlags + (upcomingEvents > 0 ? 0 : 1)));
 
           return {
@@ -209,9 +234,9 @@ export default function UnderservedAreas() {
           };
         });
 
-        const existingRegionKeys = new Set(mappedMapDataFromRows.map((item) => normalizeRegionKey(item.name)));
+        const existingRegionKeys = new Set(mappedMapDataFromRows.map((item) => canonicalRegionKey(item.name)));
         const queueOnlyMapRows: RegionRiskData[] = priorities
-          .filter((item) => !existingRegionKeys.has(normalizeRegionKey(item.region)))
+          .filter((item) => !existingRegionKeys.has(canonicalRegionKey(item.region)))
           .map((item) => {
             const flags = Math.min(5, Math.max(0, Number(item.metrics_flagged_count ?? 0)));
             return {
@@ -260,17 +285,20 @@ export default function UnderservedAreas() {
         
         // Map predictive workforce data to PredictionItem[]
         const mappedPredictions: PredictionItem[] = predictiveWorkforce.map((item) => {
-          const isShortage = item.status === "shortage" && item.projected_shortage > 0;
-          const barWidth = isShortage 
-            ? Math.min(100, Math.round((item.projected_shortage / item.projected_teacher_demand) * 100))
-            : 0;
+          const demand = Math.max(0, Number(item.projected_teacher_demand ?? 0));
+          const projectedSupply = Math.max(0, Number(item.workforce_projection ?? 0));
+          const shortageMagnitude = Math.max(0, Number(item.projected_shortage ?? 0));
+          const surplusMagnitude = Math.max(0, projectedSupply - demand);
+          const isShortage = item.status === "shortage" || shortageMagnitude > 0;
+          const gapMagnitude = isShortage ? shortageMagnitude : surplusMagnitude;
+          const barWidth = Math.min(100, Math.round((gapMagnitude / Math.max(1, demand)) * 100));
           
           return {
             region: item.region,
-            status: item.status === "shortage" ? "Shortage Projected" : "Surplus Projected",
+            status: isShortage ? "Shortage Projected" : "Surplus Projected",
             icon: isShortage ? "warning" : "check_circle",
-            gap: `${item.projected_shortage}`,
-            formula: `Demand: ${item.projected_teacher_demand} | Supply: ${item.workforce_projection}`,
+            gap: `${isShortage ? '-' : '+'}${gapMagnitude}`,
+            formula: `Demand: ${demand} | Supply: ${projectedSupply} | Hires: ${item.projected_hires} | Retirements: ${item.projected_retirements}`,
             barWidth: `${barWidth}%`,
             colorClass: isShortage ? "bg-red-500" : "bg-green-500",
             textClass: isShortage ? "text-error" : "text-success",
