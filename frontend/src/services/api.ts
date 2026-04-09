@@ -64,7 +64,14 @@ async function request(path: string, options: RequestOptions = {}) {
     body: requestBody,
   });
 
-  return response.json();
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const detail = data && typeof data === 'object' ? (data as { detail?: string; message?: string }).detail ?? (data as { message?: string }).message : null;
+    throw new Error(detail || response.statusText || 'Request failed');
+  }
+
+  return data;
 }
 
 export const api = {
