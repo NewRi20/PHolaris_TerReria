@@ -59,6 +59,30 @@ interface BackendUnderservedResponse {
   }>;
 }
 
+interface SpecializationProximityRow {
+  region?: string;
+  teacher_count?: number;
+  out_of_field_count?: number;
+  specialization_proximity_score?: number;
+}
+
+interface TrainingDroughtRow {
+  region?: string;
+  province?: string;
+  teacher_count?: number;
+  median_months_since_last_training?: number;
+  zero_training_rate?: number;
+  training_drought_index?: number;
+}
+
+interface ExperienceVoidRow {
+  region?: string;
+  teacher_count?: number;
+  novice_teachers?: number;
+  veteran_teachers?: number;
+  experience_void_ratio?: number;
+}
+
 const getColorClass = (colorCode?: string) => {
   if (colorCode === 'red') return 'bg-error';
   if (colorCode === 'orange') return 'bg-amber-500';
@@ -103,9 +127,12 @@ export default function AdminDashboard() {
     async function loadDashboardData() {
       setLoading(true);
       try {
-        const [dashboardRaw, underservedRaw] = await Promise.all([
+        const [dashboardRaw, underservedRaw, specializationRaw, droughtRaw, experienceRaw] = await Promise.all([
           api.getAdminDashboard(),
           api.getUnderservedAreas(),
+          api.getSpecializationProximity(),
+          api.getTrainingDrought(),
+          api.getExperienceVoid(),
         ]);
 
         if (dashboardRaw?.detail) {
@@ -114,6 +141,9 @@ export default function AdminDashboard() {
 
         const dashboard = (dashboardRaw ?? {}) as BackendDashboardResponse;
         const underserved = (underservedRaw ?? {}) as BackendUnderservedResponse;
+        const specializationRows = Array.isArray(specializationRaw) ? (specializationRaw as SpecializationProximityRow[]) : [];
+        const droughtRows = Array.isArray(droughtRaw) ? (droughtRaw as TrainingDroughtRow[]) : [];
+        const experienceRows = Array.isArray(experienceRaw) ? (experienceRaw as ExperienceVoidRow[]) : [];
 
         const prioritiesSource = Array.isArray(dashboard.top_uplift_priorities)
           ? dashboard.top_uplift_priorities
@@ -156,25 +186,46 @@ export default function AdminDashboard() {
           };
         });
 
-        const totalRegions = Math.max(1, Number(dashboard.total_regions ?? 0));
-        const criticalRegions = Number(dashboard.critical_regions ?? 0);
-        const shortageRegions = Number(dashboard.shortage_regions ?? 0);
-        const avgFlagged = prioritiesSource.length
-          ? prioritiesSource.reduce((sum, item) => sum + Number(item.metrics_flagged_count ?? 0), 0) / prioritiesSource.length
+        const totalOutOfField = specializationRows.reduce(
+          (sum, row) => sum + Number(row.out_of_field_count ?? 0),
+          0,
+        );
+        const totalSpecializationTeachers = specializationRows.reduce(
+          (sum, row) => sum + Number(row.teacher_count ?? 0),
+          0,
+        );
+        const outOfFieldScore = totalSpecializationTeachers > 0
+          ? Math.round((totalOutOfField / totalSpecializationTeachers) * 100)
+          : 0;
+
+        const highestOutOfField = [...specializationRows].sort(
+          (a, b) => Number(b.specialization_proximity_score ?? 0) - Number(a.specialization_proximity_score ?? 0),
+        )[0];
+
+        const avgDroughtIndex = droughtRows.length > 0
+          ? droughtRows.reduce((sum, row) => sum + Number(row.training_drought_index ?? 0), 0) / droughtRows.length
+          : 0;
+        const droughtScore = Math.round(avgDroughtIndex * 100);
+
+        const atRiskExperienceRegions = experienceRows.filter(
+          (row) => Number(row.experience_void_ratio ?? 0) >= 1,
+        ).length;
+        const experienceVoidScore = experienceRows.length > 0
+          ? Math.round((atRiskExperienceRegions / experienceRows.length) * 100)
           : 0;
 
         const nextMetrics: MetricsData = {
           outOfField: {
-            value: Math.round((criticalRegions / totalRegions) * 100),
-            trend: criticalRegions > 0 ? `${criticalRegions} critical` : '-',
+            value: outOfFieldScore,
+            trend: highestOutOfField?.region ? `Highest: ${highestOutOfField.region}` : '-',
           },
           trainingDrought: {
-            value: Number(avgFlagged.toFixed(1)),
-            status: avgFlagged >= 3 ? 'Elevated' : avgFlagged > 0 ? 'Moderate' : '-',
+            value: droughtScore,
+            status: droughtScore >= 70 ? 'Elevated' : droughtScore >= 40 ? 'Moderate' : 'Low',
           },
           experienceVoid: {
-            value: Math.round((shortageRegions / totalRegions) * 100),
-            status: shortageRegions > 0 ? `${shortageRegions} shortage regions` : '-',
+            value: experienceVoidScore,
+            status: experienceRows.length > 0 ? `${atRiskExperienceRegions}/${experienceRows.length} at-risk regions` : '-',
           },
         };
 
@@ -404,7 +455,7 @@ export default function AdminDashboard() {
                 )}
               </div>
               <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full bg-amber-500 rounded-full transition-all duration-1000" style={{ width: `${(metrics.trainingDrought.value / 10) * 100}%` }}></div>
+                <div className="h-full bg-amber-500 rounded-full transition-all duration-1000" style={{ width: `${Math.min(100, metrics.trainingDrought.value)}%` }}></div>
               </div>
               <p className="mt-3 text-[10px] text-slate-500 leading-tight">Average years since last specialized training intervention.</p>
             </div>
