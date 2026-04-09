@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, GeoJSON, Popup } from 'react-leaflet';
 import phRegionsData from "../../assets/regions.json"; 
 
 export interface MapEventData {
+  eventId?: string;
   region: string;
   title: string;
   topic: string;
@@ -66,7 +67,7 @@ export default function TeacherMap({ data = DEFAULT_EVENT_DATA, onEventAction }:
     });
 
     if (matched) {
-      return { regionName: mappedRegion, title: matched.title, topic: matched.topic, date: matched.date, status: matched.status, rawName: rawJsonString };
+      return { eventId: matched.eventId, regionName: mappedRegion, title: matched.title, topic: matched.topic, date: matched.date, status: matched.status, rawName: rawJsonString };
     } else {
       return { regionName: mappedRegion || "Unknown", title: "General Assembly", topic: "General", date: "TBA", status: "historical", rawName: rawJsonString };
     }
