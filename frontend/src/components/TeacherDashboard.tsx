@@ -154,6 +154,54 @@ function getColorWeight(colorCode: string) {
   }
 }
 
+function canonicalRegionKey(value?: string) {
+  const text = String(value ?? '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+  if (!text) return '';
+
+  if (text.includes('NCR') || text.includes('NATIONAL CAPITAL')) return 'NCR';
+  if (text === 'CAR' || text.includes('CORDILLERA')) return 'CAR';
+  if (text.includes('REGION IV A') || text.includes('REGION 4A') || text.includes('R4A') || text.includes('CALABARZON')) return 'CALABARZON';
+  if (text.includes('REGION IV B') || text.includes('REGION 4B') || text.includes('R4B') || text.includes('MIMAROPA')) return 'MIMAROPA';
+  if (text.includes('REGION XIII') || text.includes('REGION 13') || text.includes('CARAGA')) return 'CARAGA';
+  if (text.includes('REGION XII') || text.includes('REGION 12') || text.includes('SOCCSKSARGEN')) return 'SOCCSKSARGEN';
+  if (text.includes('REGION XI') || text.includes('REGION 11') || text.includes('DAVAO')) return 'DAVAO';
+  if (text.includes('REGION X') || text.includes('REGION 10') || text.includes('NORTHERN MINDANAO')) return 'NORTHERN MINDANAO';
+  if (text.includes('REGION IX') || text.includes('REGION 9') || text.includes('ZAMBOANGA PENINSULA')) return 'ZAMBOANGA PENINSULA';
+  if (text.includes('REGION VIII') || text.includes('REGION 8') || text.includes('EASTERN VISAYAS')) return 'EASTERN VISAYAS';
+  if (text.includes('REGION VII') || text.includes('REGION 7') || text.includes('CENTRAL VISAYAS')) return 'CENTRAL VISAYAS';
+  if (text.includes('REGION VI') || text.includes('REGION 6') || text.includes('WESTERN VISAYAS')) return 'WESTERN VISAYAS';
+  if (text.includes('REGION V') || text.includes('REGION 5') || text.includes('BICOL')) return 'BICOL';
+  if (text.includes('REGION III') || text.includes('REGION 3') || text.includes('CENTRAL LUZON')) return 'CENTRAL LUZON';
+  if (text.includes('REGION II') || text.includes('REGION 2') || text.includes('CAGAYAN VALLEY')) return 'CAGAYAN VALLEY';
+  if (text.includes('REGION I') || text.includes('REGION 1') || text.includes('ILOCOS')) return 'ILOCOS';
+  if (text.includes('BARMM') || text.includes('ARMM') || text.includes('AUTONOMOUS REGION IN MUSLIM MINDANAO')) return 'BARMM';
+
+  return text;
+}
+
+function displayRegionLabel(key: string, fallback?: string) {
+  const labels: Record<string, string> = {
+    NCR: 'National Capital Region',
+    CAR: 'Cordillera Administrative Region',
+    ILOCOS: 'Ilocos Region',
+    'CAGAYAN VALLEY': 'Cagayan Valley',
+    'CENTRAL LUZON': 'Central Luzon',
+    CALABARZON: 'CALABARZON',
+    MIMAROPA: 'MIMAROPA',
+    BICOL: 'Bicol Region',
+    'WESTERN VISAYAS': 'Western Visayas',
+    'CENTRAL VISAYAS': 'Central Visayas',
+    'EASTERN VISAYAS': 'Eastern Visayas',
+    'ZAMBOANGA PENINSULA': 'Zamboanga Peninsula',
+    'NORTHERN MINDANAO': 'Northern Mindanao',
+    DAVAO: 'Davao Region',
+    SOCCSKSARGEN: 'SOCCSKSARGEN',
+    CARAGA: 'Caraga',
+    BARMM: 'BARMM',
+  };
+  return labels[key] ?? fallback ?? key;
+}
+
 function getActivityKey(activity: MyActivityItem) {
   return activity.eventId ? `event:${activity.eventId}` : `activity:${activity.id}`;
 }
@@ -202,7 +250,46 @@ function saveStoredInterests(map: Record<string, boolean>) {
 }
 
 function buildQueueData(rows: RegionMetricRow[]) {
-  return [...rows]
+  const aggregatedByRegion = new Map<string, RegionMetricRow>();
+
+  rows.forEach((row) => {
+    const key = canonicalRegionKey(row.region);
+    if (!key) return;
+
+    const existing = aggregatedByRegion.get(key);
+    if (!existing) {
+      aggregatedByRegion.set(key, {
+        ...row,
+        region: displayRegionLabel(key, row.region),
+      });
+      return;
+    }
+
+    const existingReadiness = typeof existing.readiness_score === 'number' ? existing.readiness_score : null;
+    const incomingReadiness = typeof row.readiness_score === 'number' ? row.readiness_score : null;
+    const nextReadiness =
+      existingReadiness === null
+        ? incomingReadiness
+        : incomingReadiness === null
+        ? existingReadiness
+        : Math.min(existingReadiness, incomingReadiness);
+
+    aggregatedByRegion.set(key, {
+      ...existing,
+      region: displayRegionLabel(key, existing.region || row.region),
+      teacher_count: Number(existing.teacher_count ?? 0) + Number(row.teacher_count ?? 0),
+      total_interested: Number(existing.total_interested ?? 0) + Number(row.total_interested ?? 0),
+      upcoming_events_count: Number(existing.upcoming_events_count ?? 0) + Number(row.upcoming_events_count ?? 0),
+      metrics_flagged_count: Math.max(Number(existing.metrics_flagged_count ?? 0), Number(row.metrics_flagged_count ?? 0)),
+      color_code:
+        getColorWeight(String(row.color_code ?? '')) < getColorWeight(String(existing.color_code ?? ''))
+          ? row.color_code
+          : existing.color_code,
+      readiness_score: nextReadiness,
+    });
+  });
+
+  return Array.from(aggregatedByRegion.values())
     .sort((left, right) => {
       const leftWeight = getColorWeight(left.color_code);
       const rightWeight = getColorWeight(right.color_code);

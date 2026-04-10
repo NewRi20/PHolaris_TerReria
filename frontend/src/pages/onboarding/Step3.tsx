@@ -193,7 +193,7 @@ export default function Step3Workload() {
           <button
             onClick={handleContinue}
             disabled={isSaving}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#001e40] to-[#1a3a5c] text-white text-sm font-semibold hover:shadow-[0_4px_20px_rgba(0,30,64,0.25)] active:scale-[0.99] transition-all"
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-[#115cb9] to-[#1e7ddb] text-[#001e40] text-sm font-semibold hover:bg-[#001e40] hover:text-white hover:shadow-[0_4px_20px_rgba(0,30,64,0.3)] active:scale-[0.99] transition-all"
             style={{ fontFamily: 'Manrope, sans-serif' }}
           >
             {isSaving ? 'Saving...' : 'Continue'}
